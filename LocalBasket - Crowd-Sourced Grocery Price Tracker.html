@@ -1,0 +1,2611 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LocalBasket — Crowd-Sourced Local Grocery Price Tracker</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono for receipt codes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            emerald: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+              950: '#022c22',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .receipt-paper {
+      background: repeating-linear-gradient(
+        #ffffff,
+        #ffffff 23px,
+        #f1f5f9 24px
+      );
+      position: relative;
+    }
+    .receipt-jagged-top {
+      background: linear-gradient(135deg, #f8fafc 8px, transparent 0), linear-gradient(-135deg, #f8fafc 8px, transparent 0);
+      background-position: left top;
+      background-repeat: repeat-x;
+      background-size: 16px 16px;
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(16, 185, 129, 0.5); }
+      50% { border-color: rgba(16, 185, 129, 1); }
+    }
+    .animate-pulse-emerald {
+      animation: pulse-border 2s infinite;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-white">
+
+  <!-- Top Announcement / Live Ticker Bar -->
+  <div class="bg-emerald-950 text-emerald-100 text-xs py-2 px-4 border-b border-emerald-900">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping mr-1.5"></span>
+          LIVE COMMUNITY FEED
+        </span>
+        <span id="liveTickerText" class="text-emerald-100/90 truncate max-w-xs sm:max-w-md md:max-w-xl">
+          12 staple items tracked across Aldi, Trader Joe's, Walmart &amp; Safeway — Avg basket savings: 28.4%
+        </span>
+      </div>
+      <div class="hidden sm:flex items-center gap-3 text-emerald-300/80">
+        <span><strong id="statTotalSightings" class="text-white">48</strong> price sightings</span>
+        <span>•</span>
+        <span><strong id="statTotalItems" class="text-white">12</strong> products normalized</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Header -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        <!-- Brand Logo -->
+        <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('board')">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+            <i data-lucide="shopping-basket" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
+                Local<span class="text-emerald-600">Basket</span>
+              </h1>
+              <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                AI Vision + Smart Cart
+              </span>
+            </div>
+            <p class="text-xs text-slate-500 hidden sm:block">Crowd-Sourced Neighborhood Grocery Price Tracker</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs (Desktop) -->
+        <nav class="hidden md:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80" aria-label="Main Navigation">
+          <button id="nav-board" onclick="switchTab('board')" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white text-emerald-700 shadow-sm">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+            <span>Price Board</span>
+            <span id="navBadgeCount" class="ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-emerald-100 text-emerald-800 font-bold">12</span>
+          </button>
+          <button id="nav-scanner" onclick="switchTab('scanner')" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+            <i data-lucide="scan-line" class="w-4 h-4"></i>
+            <span>Scan Receipt</span>
+          </button>
+          <button id="nav-dealfinder" onclick="switchTab('dealfinder')" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>AI Deal Finder</span>
+            <span id="smartListBadge" class="hidden ml-1 px-1.5 py-0.5 text-[11px] rounded-full bg-amber-100 text-amber-800 font-bold">0</span>
+          </button>
+        </nav>
+
+        <!-- Action Buttons: Try Sample Receipt & Settings / API Key -->
+        <div class="flex items-center gap-2">
+          <button
+            onclick="triggerSampleReceiptFlow()"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all shadow-sm active:scale-[0.99]"
+            title="Test the receipt scanning workflow immediately without an API key"
+          >
+            <i data-lucide="receipt" class="w-4 h-4 text-emerald-600"></i>
+            <span class="hidden sm:inline">Try Sample Receipt</span>
+            <span class="sm:hidden">Sample</span>
+          </button>
+
+          <button
+            onclick="openApiModal()"
+            id="apiKeyHeaderBtn"
+            class="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition-all shadow-sm"
+          >
+            <span id="apiKeyStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <i data-lucide="key-round" class="w-4 h-4 text-slate-500"></i>
+            <span id="apiKeyHeaderLabel">Settings / API Key</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Tabs -->
+      <div class="flex md:hidden items-center justify-around bg-slate-100 p-1 rounded-xl mb-3 border border-slate-200">
+        <button id="mob-nav-board" onclick="switchTab('board')" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all bg-white text-emerald-700 shadow-sm">
+          <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+          <span>Price Board</span>
+        </button>
+        <button id="mob-nav-scanner" onclick="switchTab('scanner')" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all text-slate-600">
+          <i data-lucide="scan-line" class="w-3.5 h-3.5"></i>
+          <span>Scan Receipt</span>
+        </button>
+        <button id="mob-nav-dealfinder" onclick="switchTab('dealfinder')" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all text-slate-600">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>Deal Finder</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================================== -->
+    <!-- TAB 1: LIVE PRICE COMPARISON BOARD                         -->
+    <!-- ========================================================== -->
+    <section id="tab-board" class="space-y-6">
+
+      <!-- Hero Summary & Quick Actions Banner -->
+      <div class="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-2xl p-5 sm:p-6 text-white shadow-lg relative overflow-hidden">
+        <div class="absolute -right-10 -bottom-10 w-56 h-56 bg-emerald-400/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div class="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div class="space-y-2 max-w-2xl">
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-700/60 border border-emerald-500/40 text-emerald-200 text-xs font-medium">
+              <i data-lucide="trending-down" class="w-3.5 h-3.5"></i>
+              <span>Real-Time Neighborhood Grocery Index</span>
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Compare Local Store Prices Before You Shop
+            </h2>
+            <p class="text-emerald-100/90 text-sm sm:text-base leading-relaxed">
+              Every cryptic receipt line like <code class="px-1.5 py-0.5 rounded bg-black/30 font-mono text-xs text-emerald-200">ORG LRG EGGS 12CT</code> is normalized by Gemini Vision into clean products so neighbors can spot the true lowest price.
+            </p>
+          </div>
+
+          <div class="flex flex-wrap sm:flex-nowrap items-center gap-3">
+            <button
+              onclick="switchTab('scanner')"
+              class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm bg-white text-emerald-900 hover:bg-emerald-50 shadow-md transition-all"
+            >
+              <i data-lucide="camera" class="w-4 h-4 text-emerald-600"></i>
+              <span>Scan a Receipt</span>
+            </button>
+            <button
+              onclick="openManualPriceModal()"
+              class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm bg-emerald-700/70 hover:bg-emerald-700 text-white border border-emerald-500/40 transition-all"
+            >
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Log Single Price</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Store Index Mini Leaderboard -->
+        <div id="storeOverviewCards" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-emerald-700/60">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+
+      <!-- Filter & Search Controls Bar -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <!-- Search Input -->
+          <div class="relative flex-1">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input
+              type="text"
+              id="searchInput"
+              oninput="renderPriceBoard()"
+              placeholder="Search items (e.g., Eggs, Milk, Avocados, Sourdough, or raw code ORG LRG)..."
+              class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+            />
+            <button
+              id="clearSearchBtn"
+              onclick="clearSearch()"
+              class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              title="Clear search"
+            >
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Store Filter & Sort Dropdowns -->
+          <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+            <div class="flex items-center gap-2 flex-1 sm:flex-initial">
+              <label for="storeFilter" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Store:</label>
+              <select
+                id="storeFilter"
+                onchange="renderPriceBoard()"
+                class="w-full sm:w-auto px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="ALL">All Stores (4)</option>
+                <option value="Aldi">Aldi</option>
+                <option value="Trader Joe's">Trader Joe's</option>
+                <option value="Walmart">Walmart</option>
+                <option value="Safeway">Safeway</option>
+              </select>
+            </div>
+
+            <div class="flex items-center gap-2 flex-1 sm:flex-initial">
+              <label for="sortOrder" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Sort:</label>
+              <select
+                id="sortOrder"
+                onchange="renderPriceBoard()"
+                class="w-full sm:w-auto px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="savings">Biggest Spread / Savings</option>
+                <option value="recent">Recently Updated</option>
+                <option value="lowest">Lowest Best Price</option>
+                <option value="alpha">Name (A–Z)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Filter Pills -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar" id="categoryFilterContainer">
+          <!-- Rendered by JS: All, Dairy & Eggs, Produce, Pantry, Bakery, Meat -->
+        </div>
+      </div>
+
+      <!-- Price Comparison Cards Grid -->
+      <div id="priceBoardGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Populated dynamically by JS -->
+      </div>
+
+      <!-- Empty State if filters match nothing -->
+      <div id="emptyBoardState" class="hidden bg-white rounded-2xl p-12 text-center border border-slate-200">
+        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="search-x" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800">No matching grocery items found</h3>
+        <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+          Try clearing your search or category filter, or scan a new receipt to add this item to the community board.
+        </p>
+        <button
+          onclick="resetBoardFilters()"
+          class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-all"
+        >
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          <span>Reset Filters</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========================================================== -->
+    <!-- TAB 2: REAL GEMINI VISION RECEIPT SCANNER                  -->
+    <!-- ========================================================== -->
+    <section id="tab-scanner" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+          <div>
+            <div class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 mb-1">
+              <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+              <span>Gemini Vision Structured JSON Extraction</span>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Scan a Grocery Receipt</h2>
+            <p class="text-sm text-slate-500 mt-0.5">
+              Upload a photo of your grocery receipt or load a sample receipt. Gemini automatically normalizes cryptic item codes into standard grocery names.
+            </p>
+          </div>
+
+          <!-- Sample Receipt Selector & Trigger -->
+          <div class="flex flex-wrap items-center gap-2 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200">
+            <select
+              id="sampleReceiptSelect"
+              class="px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-white text-slate-800 border border-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="trader_joes">Sample #1: Trader Joe's (6 items)</option>
+              <option value="aldi">Sample #2: Aldi Weekly Run (6 items)</option>
+              <option value="safeway">Sample #3: Safeway Evening Run (5 items)</option>
+              <option value="walmart">Sample #4: Walmart Supercenter (6 items)</option>
+            </select>
+            <button
+              onclick="loadSelectedSampleReceipt()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+            >
+              <i data-lucide="wand-2" class="w-4 h-4"></i>
+              <span>Try Sample Receipt</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Two-Column Scanner Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+          <!-- Left Column: Upload Dropzone & Receipt Image Preview (5 cols) -->
+          <div class="lg:col-span-5 space-y-4">
+            <!-- Upload Dropzone -->
+            <div
+              id="receiptDropzone"
+              onclick="document.getElementById('receiptFileInput').click()"
+              ondragover="handleDragOver(event)"
+              ondragleave="handleDragLeave(event)"
+              ondrop="handleDrop(event)"
+              class="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer transition-all bg-slate-50/70 hover:bg-emerald-50/30 group"
+            >
+              <input
+                type="file"
+                id="receiptFileInput"
+                accept="image/*"
+                capture="environment"
+                class="hidden"
+                onchange="handleReceiptFileSelect(event)"
+              />
+              <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
+                <i data-lucide="camera" class="w-7 h-7"></i>
+              </div>
+              <p class="text-sm font-bold text-slate-800">
+                Click to upload receipt photo or take a picture
+              </p>
+              <p class="text-xs text-slate-500 mt-1">
+                Supports JPG, PNG, WEBP • Drag &amp; drop supported
+              </p>
+              <div class="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                <i data-lucide="upload" class="w-3.5 h-3.5 text-emerald-600"></i>
+                <span>Choose Image File</span>
+              </div>
+            </div>
+
+            <!-- Receipt Preview Box -->
+            <div id="receiptPreviewContainer" class="hidden bg-slate-900 rounded-2xl p-4 text-white space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                  <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                  <span id="receiptPreviewLabel">Uploaded Receipt Image</span>
+                </span>
+                <button
+                  id="rescanWithGeminiBtn"
+                  onclick="scanUploadedImageWithGemini()"
+                  class="hidden text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1"
+                >
+                  <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                  <span>Re-Scan via Gemini</span>
+                </button>
+              </div>
+              <div class="rounded-xl overflow-hidden bg-slate-800 border border-slate-700 max-h-96 flex items-center justify-center">
+                <img id="receiptImagePreview" src="" alt="Receipt preview" class="max-h-96 w-auto object-contain" />
+              </div>
+            </div>
+
+            <!-- How Gemini Normalization Works Info Box -->
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-2.5">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <i data-lucide="code-2" class="w-4 h-4 text-emerald-600"></i>
+                <span>How Gemini Receipt Normalization Works</span>
+              </h4>
+              <div class="grid grid-cols-1 gap-2 text-xs">
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                  <span class="font-mono text-slate-600">ORG LRG EGGS 12CT</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-emerald-500"></i>
+                  <span class="font-semibold text-emerald-800">Large Eggs (1 Dozen)</span>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                  <span class="font-mono text-slate-600">TJ HASS AVO BAG/EA</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-emerald-500"></i>
+                  <span class="font-semibold text-emerald-800">Hass Avocados (Each)</span>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                  <span class="font-mono text-slate-600">GV WHL MLK 1GAL</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-emerald-500"></i>
+                  <span class="font-semibold text-emerald-800">Whole Milk (1 Gallon)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Loading State / Error Banner / Editable Confirmation List (7 cols) -->
+          <div class="lg:col-span-7">
+            <!-- Initial Idle Prompt -->
+            <div id="scannerIdleState" class="h-full min-h-[360px] flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-slate-200 bg-slate-50/50">
+              <div class="w-16 h-16 rounded-2xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-4">
+                <i data-lucide="receipt" class="w-8 h-8"></i>
+              </div>
+              <h3 class="text-lg font-bold text-slate-800">Ready to Extract Receipt Line Items</h3>
+              <p class="text-sm text-slate-500 max-w-md mt-1">
+                Upload a receipt photo on the left to invoke Gemini Vision with <code class="px-1.5 py-0.5 rounded bg-slate-200/70 font-mono text-xs">responseMimeType: "application/json"</code>, or click <strong>"Try Sample Receipt"</strong> to inspect a full sample extraction immediately.
+              </p>
+              <div class="mt-5 flex flex-wrap justify-center gap-3">
+                <button
+                  onclick="loadSelectedSampleReceipt()"
+                  class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                >
+                  <i data-lucide="sparkles" class="w-4 h-4"></i>
+                  <span>Load Sample Receipt Now</span>
+                </button>
+                <button
+                  onclick="openApiModal()"
+                  class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition-all"
+                >
+                  <i data-lucide="key-round" class="w-4 h-4 text-slate-500"></i>
+                  <span>Configure Gemini API Key</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Loading Spinner State during Gemini Vision API Call -->
+            <div id="scannerLoadingState" class="hidden h-full min-h-[360px] flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-emerald-200 bg-emerald-50/30">
+              <div class="relative w-16 h-16 flex items-center justify-center mb-4">
+                <div class="absolute inset-0 rounded-full border-4 border-emerald-200"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin"></div>
+                <i data-lucide="scan-line" class="w-6 h-6 text-emerald-600"></i>
+              </div>
+              <h3 class="text-lg font-bold text-slate-900" id="scannerLoadingTitle">Gemini Vision is Reading Your Receipt...</h3>
+              <p class="text-sm text-slate-600 max-w-md mt-1" id="scannerLoadingSubtitle">
+                Extracting store name, deciphering abbreviated line items, assigning categories, and formatting structured JSON.
+              </p>
+            </div>
+
+            <!-- Error / Missing Key Fallback State -->
+            <div id="scannerErrorState" class="hidden rounded-2xl border border-rose-200 bg-rose-50 p-5 mb-4">
+              <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-bold text-rose-900" id="scannerErrorTitle">API Key Required for Live Image Parsing</h4>
+                  <p class="text-xs text-rose-700 mt-1 leading-relaxed" id="scannerErrorMessage">
+                    Please add your Gemini API key in Settings, or use the simulated extraction button below to test the workflow with this image.
+                  </p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onclick="openApiModal()"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-700 hover:bg-rose-800 text-white transition-all"
+                    >
+                      <i data-lucide="key-round" class="w-3.5 h-3.5"></i>
+                      <span>Set API Key</span>
+                    </button>
+                    <button
+                      onclick="loadSelectedSampleReceipt()"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 transition-all"
+                    >
+                      <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+                      <span>Use Demo Extraction Instead</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Editable Confirmation Table Container -->
+            <div id="scannerResultsContainer" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <!-- Store Header & Source Badge -->
+              <div class="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span id="extractionModeBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                      <i data-lucide="check-circle-2" class="w-3 h-3"></i>
+                      <span>Extracted &amp; Normalized</span>
+                    </span>
+                    <span class="text-xs text-slate-500">Review or edit any field before publishing</span>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label for="extractedStoreName" class="text-xs font-bold uppercase tracking-wider text-slate-500">Detected Store:</label>
+                    <input
+                      type="text"
+                      id="extractedStoreName"
+                      list="knownStoresList"
+                      class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="e.g., Trader Joe's"
+                    />
+                    <datalist id="knownStoresList">
+                      <option value="Trader Joe's"></option>
+                      <option value="Aldi"></option>
+                      <option value="Safeway"></option>
+                      <option value="Walmart"></option>
+                      <option value="Whole Foods"></option>
+                      <option value="Kroger"></option>
+                      <option value="Target"></option>
+                    </datalist>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button
+                    onclick="addBlankExtractedItem()"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-all"
+                  >
+                    <i data-lucide="plus" class="w-3.5 h-3.5 text-emerald-600"></i>
+                    <span>Add Row</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Editable Items List -->
+              <div id="extractedItemsList" class="divide-y divide-slate-100 max-h-[460px] overflow-y-auto p-3 sm:p-4 space-y-3">
+                <!-- Populated dynamically by JS -->
+              </div>
+
+              <!-- Datalist of normalized names for easy matching -->
+              <datalist id="existingNormalizedNamesList"></datalist>
+
+              <!-- Confirmation Footer -->
+              <div class="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                  <div>
+                    <span class="text-xs text-slate-500 block">Items to Publish</span>
+                    <span id="extractedCountSummary" class="text-base font-extrabold text-slate-900">0 items</span>
+                  </div>
+                  <div class="h-8 w-px bg-slate-200"></div>
+                  <div>
+                    <span class="text-xs text-slate-500 block">Receipt Subtotal</span>
+                    <span id="extractedTotalSummary" class="text-base font-extrabold text-emerald-700">$0.00</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2.5">
+                  <button
+                    onclick="clearScannerResults()"
+                    class="px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-200/60 transition-all"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    onclick="publishExtractedItems()"
+                    class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all active:scale-[0.99]"
+                  >
+                    <i data-lucide="check-check" class="w-4 h-4"></i>
+                    <span>Publish to Price Board</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================== -->
+    <!-- TAB 3: AI SMART CART / DEAL FINDER                         -->
+    <!-- ========================================================== -->
+    <section id="tab-dealfinder" class="hidden space-y-6">
+      <!-- Top Input Card -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+        <div class="max-w-3xl">
+          <div class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 mb-1">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>AI Smart Cart &amp; Basket Optimizer</span>
+          </div>
+          <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">
+            Find the Cheapest Store for Your Meal or Shopping List
+          </h2>
+          <p class="text-sm text-slate-500 mt-1">
+            Type any meal idea (like <em>"Tacos for 4"</em>) or a list of groceries. We pass your request and the live community price board to Gemini to calculate the lowest Single-Store basket and the Max-Savings Split Trip.
+          </p>
+        </div>
+
+        <!-- Prompt Input & Submit -->
+        <div class="mt-5 flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="shopping-cart" class="w-5 h-5 text-emerald-600 absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input
+              type="text"
+              id="dealFinderInput"
+               onkeydown="if(event.key==='Enter') runDealFinder()"
+              placeholder="e.g., Tacos for 4, or Milk, eggs, butter, and sourdough bread..."
+              class="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-300 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
+            />
+          </div>
+          <button
+            id="runDealFinderBtn"
+            onclick="runDealFinder()"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm sm:text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all shrink-0"
+          >
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>Find Best Deals</span>
+          </button>
+        </div>
+
+        <!-- Preset Prompt Chips -->
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-400 mr-1">Try a preset:</span>
+          <button onclick="selectDealPreset('Tacos for 4 (ground beef, tortillas, avocados, tomatoes, black beans)')" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 transition-all">
+            🌮 Tacos for 4
+          </button>
+          <button onclick="selectDealPreset('Milk, eggs, butter, and sourdough bread')" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 transition-all">
+            🥛 Milk, eggs, butter &amp; bread
+          </button>
+          <button onclick="selectDealPreset('High-protein weeknight prep: chicken breast, ground beef, eggs, black beans, olive oil')" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 transition-all">
+            💪 High-Protein Meal Prep
+          </button>
+          <button onclick="selectDealPreset('Weekend brunch: sourdough bread, avocados, large eggs, bananas, whole milk')" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 transition-all">
+            🥑 Weekend Avocado Brunch
+          </button>
+          <button onclick="selectDealPreset('Full 12-item kitchen restock')" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 transition-all">
+            🛒 Full Kitchen Restock
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State for Deal Finder -->
+      <div id="dealFinderLoading" class="hidden bg-white rounded-2xl p-10 border border-emerald-200 text-center space-y-3 shadow-sm">
+        <div class="relative w-14 h-14 mx-auto flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full border-4 border-emerald-100"></div>
+          <div class="absolute inset-0 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin"></div>
+          <i data-lucide="calculator" class="w-6 h-6 text-emerald-600"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900">Analyzing Live Store Prices with Gemini...</h3>
+        <p class="text-sm text-slate-500 max-w-md mx-auto">
+          Comparing single-store basket totals across Aldi, Trader Joe's, Walmart, and Safeway vs. an optimal split-store route.
+        </p>
+      </div>
+
+      <!-- Deal Finder Results Container -->
+      <div id="dealFinderResults" class="hidden space-y-6">
+        <!-- Populated dynamically by JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 mt-12 py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+          <i data-lucide="shopping-basket" class="w-3.5 h-3.5"></i>
+        </div>
+        <span class="font-bold text-slate-800">LocalBasket</span>
+        <span>• Crowd-Sourced Grocery Price Tracker powered by Gemini REST API</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="resetToDefaultData()" class="hover:text-emerald-600 underline">Reset Demo Data</button>
+        <span>•</span>
+        <button onclick="openApiModal()" class="hover:text-emerald-600 underline">API Key Settings</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================== -->
+  <!-- MODAL 1: SETTINGS / GEMINI API KEY                         -->
+  <!-- ========================================================== -->
+  <div id="apiModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <i data-lucide="key-round" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-extrabold text-slate-900">Gemini API Key &amp; Settings</h3>
+            <p class="text-xs text-slate-500">Saved locally in your browser's <code class="font-mono">localStorage</code></p>
+          </div>
+        </div>
+        <button onclick="closeApiModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label for="geminiApiKeyInput" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+            Your Gemini API Key
+          </label>
+          <div class="relative">
+            <input
+              type="password"
+              id="geminiApiKeyInput"
+              placeholder="AIzaSy..."
+              class="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <button
+              type="button"
+              onclick="toggleApiKeyVisibility()"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              title="Show/Hide API Key"
+            >
+              <i data-lucide="eye" class="w-4 h-4" id="apiKeyEyeIcon"></i>
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-emerald-600 font-semibold underline">Google AI Studio</a>. When running inside Gemini Canvas, LocalBasket also supports automatic Canvas runtime fallback if left blank.
+          </p>
+        </div>
+
+        <div>
+          <label for="geminiModelSelect" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+            Gemini Model
+          </label>
+          <select
+            id="geminiModelSelect"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended Default)</option>
+            <option value="gemini-3-flash-preview">gemini-3-flash-preview (Canvas Native)</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro (Advanced Reasoning)</option>
+          </select>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+          <div class="font-bold flex items-center gap-1.5">
+            <i data-lucide="info" class="w-4 h-4 text-emerald-600"></i>
+            <span>No API Key? Demo Mode Works Out of the Box!</span>
+          </div>
+          <p class="text-emerald-800/90 leading-relaxed">
+            You can click <strong>"Try Sample Receipt"</strong> in the header or use the <strong>AI Deal Finder</strong> immediately — LocalBasket includes realistic sample receipts and a smart local optimizer fallback.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+        <button
+          onclick="clearSavedApiKey()"
+          class="text-xs font-semibold text-rose-600 hover:text-rose-700 px-3 py-2 rounded-lg hover:bg-rose-50 transition-all"
+        >
+          Clear Saved Key
+        </button>
+        <div class="flex items-center gap-2">
+          <button
+            onclick="closeApiModal()"
+            class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="saveApiSettings()"
+            class="px-5 py-2 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+          >
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- MODAL 2: MANUALLY LOG A SINGLE PRICE SIGHTING              -->
+  <!-- ========================================================== -->
+  <div id="manualPriceModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <i data-lucide="tag" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-extrabold text-slate-900">Log a Store Price Sighting</h3>
+            <p class="text-xs text-slate-500">Spot a lower price in the aisle? Share it with the community.</p>
+          </div>
+        </div>
+        <button onclick="closeManualPriceModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Store Name</label>
+          <input
+            type="text"
+            id="manualStoreInput"
+            list="knownStoresList"
+            value="Aldi"
+            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Standardized Product Name</label>
+          <input
+            type="text"
+            id="manualNormalizedInput"
+            list="existingNormalizedNamesList"
+            placeholder="e.g., Large Eggs (1 Dozen)"
+            class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Category</label>
+            <select
+              id="manualCategoryInput"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="Dairy & Eggs">Dairy &amp; Eggs</option>
+              <option value="Produce">Produce</option>
+              <option value="Meat">Meat</option>
+              <option value="Bakery">Bakery</option>
+              <option value="Pantry">Pantry</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Price ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              id="manualPriceInput"
+              placeholder="2.99"
+              class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Unit / Size</label>
+            <input
+              type="text"
+              id="manualUnitInput"
+              placeholder="e.g., 12 ct, 1 lb"
+              value="1 unit"
+              class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Receipt Code (Optional)</label>
+            <input
+              type="text"
+              id="manualRawInput"
+              placeholder="e.g., LRG EGGS 12CT"
+              class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button
+          onclick="closeManualPriceModal()"
+          class="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          onclick="submitManualPrice()"
+          class="px-5 py-2 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+        >
+          Add to Price Board
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- ========================================================== -->
+  <!-- APPLICATION JAVASCRIPT                                     -->
+  <!-- ========================================================== -->
+  <script>
+    // ------------------------------------------------------------
+    // 1. CONSTANTS, CATEGORIES & INITIAL 12-ITEM DATASET (4 STORES)
+    // ------------------------------------------------------------
+    const STORAGE_KEY_API = 'localbasket_gemini_key';
+    const STORAGE_KEY_MODEL = 'localbasket_gemini_model';
+    const STORAGE_KEY_PRICES = 'localbasket_price_sightings_v1';
+
+    const CATEGORIES = ['All', 'Dairy & Eggs', 'Produce', 'Meat', 'Bakery', 'Pantry'];
+
+    const CATEGORY_META = {
+      'Dairy & Eggs': { icon: 'egg', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' },
+      'Produce':      { icon: 'apple', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+      'Meat':         { icon: 'beef', badgeClass: 'bg-rose-50 text-rose-800 border-rose-200' },
+      'Bakery':       { icon: 'croissant', badgeClass: 'bg-orange-50 text-orange-800 border-orange-200' },
+      'Pantry':       { icon: 'package', badgeClass: 'bg-sky-50 text-sky-800 border-sky-200' }
+    };
+
+    const STORE_BADGE_STYLES = {
+      "Aldi":         { dot: 'bg-sky-500', badge: 'bg-sky-50 text-sky-800 border-sky-200' },
+      "Trader Joe's": { dot: 'bg-rose-500', badge: 'bg-rose-50 text-rose-800 border-rose-200' },
+      "Walmart":      { dot: 'bg-blue-600', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
+      "Safeway":      { dot: 'bg-red-500', badge: 'bg-red-50 text-red-800 border-red-200' }
+    };
+
+    // 12 realistic grocery items across 4 stores (48 price entries)
+    const INITIAL_PRICE_SIGHTINGS = [
+      // 1. Large Eggs (1 Dozen) - Dairy & Eggs
+      { id: 's1', store_name: 'Aldi', raw_name: 'GOLD HEN LRG EGGS DZ', normalized_name: 'Large Eggs (1 Dozen)', category: 'Dairy & Eggs', price: 2.69, unit: '12 ct', timestamp: Date.now() - 45 * 60 * 1000 },
+      { id: 's2', store_name: "Trader Joe's", raw_name: 'TJ PASTURE LRG EGGS', normalized_name: 'Large Eggs (1 Dozen)', category: 'Dairy & Eggs', price: 3.49, unit: '12 ct', timestamp: Date.now() - 110 * 60 * 1000 },
+      { id: 's3', store_name: 'Walmart', raw_name: 'GV LRG WHT EGGS 12CT', normalized_name: 'Large Eggs (1 Dozen)', category: 'Dairy & Eggs', price: 2.98, unit: '12 ct', timestamp: Date.now() - 180 * 60 * 1000 },
+      { id: 's4', store_name: 'Safeway', raw_name: 'LUCERNE LRG EGGS 12', normalized_name: 'Large Eggs (1 Dozen)', category: 'Dairy & Eggs', price: 4.29, unit: '12 ct', timestamp: Date.now() - 240 * 60 * 1000 },
+
+      // 2. Whole Milk (1 Gallon) - Dairy & Eggs
+      { id: 's5', store_name: 'Aldi', raw_name: 'FRIENDLY FARMS WHL MLK', normalized_name: 'Whole Milk (1 Gallon)', category: 'Dairy & Eggs', price: 3.19, unit: '1 gal', timestamp: Date.now() - 30 * 60 * 1000 },
+      { id: 's6', store_name: 'Walmart', raw_name: 'GV WHOLE MILK 1GAL', normalized_name: 'Whole Milk (1 Gallon)', category: 'Dairy & Eggs', price: 3.34, unit: '1 gal', timestamp: Date.now() - 95 * 60 * 1000 },
+      { id: 's7', store_name: "Trader Joe's", raw_name: 'TJ WHL MILK GAL VIT D', normalized_name: 'Whole Milk (1 Gallon)', category: 'Dairy & Eggs', price: 3.89, unit: '1 gal', timestamp: Date.now() - 210 * 60 * 1000 },
+      { id: 's8', store_name: 'Safeway', raw_name: 'LUCERNE VIT D WHL MLK', normalized_name: 'Whole Milk (1 Gallon)', category: 'Dairy & Eggs', price: 4.49, unit: '1 gal', timestamp: Date.now() - 300 * 60 * 1000 },
+
+      // 3. Salted Butter (1 lb) - Dairy & Eggs
+      { id: 's9', store_name: 'Aldi', raw_name: 'COUNTRYSIDE CRM BTR 16Z', normalized_name: 'Salted Butter (1 lb)', category: 'Dairy & Eggs', price: 3.65, unit: '16 oz', timestamp: Date.now() - 80 * 60 * 1000 },
+      { id: 's10', store_name: "Trader Joe's", raw_name: 'TJ SALTED BUTTER QTRS', normalized_name: 'Salted Butter (1 lb)', category: 'Dairy & Eggs', price: 3.99, unit: '16 oz', timestamp: Date.now() - 140 * 60 * 1000 },
+      { id: 's11', store_name: 'Walmart', raw_name: 'GV SWEET CRM BUTTER 1LB', normalized_name: 'Salted Butter (1 lb)', category: 'Dairy & Eggs', price: 3.78, unit: '16 oz', timestamp: Date.now() - 200 * 60 * 1000 },
+      { id: 's12', store_name: 'Safeway', raw_name: 'LUCERNE SLTD BTR 4QTR', normalized_name: 'Salted Butter (1 lb)', category: 'Dairy & Eggs', price: 5.49, unit: '16 oz', timestamp: Date.now() - 360 * 60 * 1000 },
+
+      // 4. Organic Bananas (1 lb) - Produce
+      { id: 's13', store_name: "Trader Joe's", raw_name: 'ORG BANANAS BUNCH LB', normalized_name: 'Organic Bananas (1 lb)', category: 'Produce', price: 0.59, unit: '1 lb', timestamp: Date.now() - 25 * 60 * 1000 },
+      { id: 's14', store_name: 'Aldi', raw_name: 'ORG CAVENDISH BANANA', normalized_name: 'Organic Bananas (1 lb)', category: 'Produce', price: 0.65, unit: '1 lb', timestamp: Date.now() - 70 * 60 * 1000 },
+      { id: 's15', store_name: 'Walmart', raw_name: 'FRESH ORG BANANAS LB', normalized_name: 'Organic Bananas (1 lb)', category: 'Produce', price: 0.68, unit: '1 lb', timestamp: Date.now() - 150 * 60 * 1000 },
+      { id: 's16', store_name: 'Safeway', raw_name: 'O ORGANICS BANANA LB', normalized_name: 'Organic Bananas (1 lb)', category: 'Produce', price: 0.89, unit: '1 lb', timestamp: Date.now() - 280 * 60 * 1000 },
+
+      // 5. Hass Avocados (Each) - Produce
+      { id: 's17', store_name: 'Aldi', raw_name: 'MED HASS AVOCADO EA', normalized_name: 'Hass Avocados (Each)', category: 'Produce', price: 0.79, unit: '1 ea', timestamp: Date.now() - 20 * 60 * 1000 },
+      { id: 's18', store_name: 'Walmart', raw_name: 'HASS AVOCADO MED 4046', normalized_name: 'Hass Avocados (Each)', category: 'Produce', price: 0.88, unit: '1 ea', timestamp: Date.now() - 60 * 60 * 1000 },
+      { id: 's19', store_name: "Trader Joe's", raw_name: 'TJ HASS AVOCADO SINGLE', normalized_name: 'Hass Avocados (Each)', category: 'Produce', price: 0.99, unit: '1 ea', timestamp: Date.now() - 130 * 60 * 1000 },
+      { id: 's20', store_name: 'Safeway', raw_name: 'LRG HASS AVOCADO EA', normalized_name: 'Hass Avocados (Each)', category: 'Produce', price: 1.69, unit: '1 ea', timestamp: Date.now() - 190 * 60 * 1000 },
+
+      // 6. Roma Tomatoes (1 lb) - Produce
+      { id: 's21', store_name: 'Aldi', raw_name: 'ROMA TOMATOES PKG LB', normalized_name: 'Roma Tomatoes (1 lb)', category: 'Produce', price: 1.19, unit: '1 lb', timestamp: Date.now() - 50 * 60 * 1000 },
+      { id: 's22', store_name: 'Walmart', raw_name: 'FRESH ROMA TOMATO LB', normalized_name: 'Roma Tomatoes (1 lb)', category: 'Produce', price: 1.28, unit: '1 lb', timestamp: Date.now() - 115 * 60 * 1000 },
+      { id: 's23', store_name: "Trader Joe's", raw_name: 'TJ ROMA PLUM TOMATO', normalized_name: 'Roma Tomatoes (1 lb)', category: 'Produce', price: 1.49, unit: '1 lb', timestamp: Date.now() - 175 * 60 * 1000 },
+      { id: 's24', store_name: 'Safeway', raw_name: 'VINE ROMA TOMATOES LB', normalized_name: 'Roma Tomatoes (1 lb)', category: 'Produce', price: 1.99, unit: '1 lb', timestamp: Date.now() - 250 * 60 * 1000 },
+
+      // 7. Boneless Skinless Chicken Breast (1 lb) - Meat
+      { id: 's25', store_name: 'Aldi', raw_name: 'KIRKWOOD BNLS CHKN BRST', normalized_name: 'Boneless Skinless Chicken Breast (1 lb)', category: 'Meat', price: 2.89, unit: '1 lb', timestamp: Date.now() - 40 * 60 * 1000 },
+      { id: 's26', store_name: 'Walmart', raw_name: 'TYSON BNLS SKNLS CHKN', normalized_name: 'Boneless Skinless Chicken Breast (1 lb)', category: 'Meat', price: 3.12, unit: '1 lb', timestamp: Date.now() - 85 * 60 * 1000 },
+      { id: 's27', store_name: "Trader Joe's", raw_name: 'TJ AIR CHILLED CHKN BRST', normalized_name: 'Boneless Skinless Chicken Breast (1 lb)', category: 'Meat', price: 4.49, unit: '1 lb', timestamp: Date.now() - 160 * 60 * 1000 },
+      { id: 's28', store_name: 'Safeway', raw_name: 'OPEN NATURE CHKN BRST', normalized_name: 'Boneless Skinless Chicken Breast (1 lb)', category: 'Meat', price: 5.49, unit: '1 lb', timestamp: Date.now() - 290 * 60 * 1000 },
+
+      // 8. Ground Beef 80/20 (1 lb) - Meat
+      { id: 's29', store_name: 'Walmart', raw_name: 'ALL NAT GRND BEEF 80/20', normalized_name: 'Ground Beef 80/20 (1 lb)', category: 'Meat', price: 4.46, unit: '1 lb', timestamp: Date.now() - 35 * 60 * 1000 },
+      { id: 's30', store_name: 'Aldi', raw_name: 'FRESH GRND BEEF CHUCK', normalized_name: 'Ground Beef 80/20 (1 lb)', category: 'Meat', price: 4.49, unit: '1 lb', timestamp: Date.now() - 90 * 60 * 1000 },
+      { id: 's31', store_name: "Trader Joe's", raw_name: 'TJ ANGUS GRND BEEF 80/20', normalized_name: 'Ground Beef 80/20 (1 lb)', category: 'Meat', price: 5.49, unit: '1 lb', timestamp: Date.now() - 145 * 60 * 1000 },
+      { id: 's32', store_name: 'Safeway', raw_name: 'SIGNATURE GRND BEEF 80', normalized_name: 'Ground Beef 80/20 (1 lb)', category: 'Meat', price: 6.29, unit: '1 lb', timestamp: Date.now() - 220 * 60 * 1000 },
+
+      // 9. Sourdough Bread Loaf (24 oz) - Bakery
+      { id: 's33', store_name: "Trader Joe's", raw_name: 'TJ SAN FRAN SOURDOUGH', normalized_name: 'Sourdough Bread Loaf (24 oz)', category: 'Bakery', price: 3.49, unit: '24 oz', timestamp: Date.now() - 15 * 60 * 1000 },
+      { id: 's34', store_name: 'Aldi', raw_name: 'SPECIALLY SLCT SOURDGH', normalized_name: 'Sourdough Bread Loaf (24 oz)', category: 'Bakery', price: 3.79, unit: '24 oz', timestamp: Date.now() - 75 * 60 * 1000 },
+      { id: 's35', store_name: 'Walmart', raw_name: 'MARKETSIDE SOURDOUGH LF', normalized_name: 'Sourdough Bread Loaf (24 oz)', category: 'Bakery', price: 3.98, unit: '24 oz', timestamp: Date.now() - 135 * 60 * 1000 },
+      { id: 's36', store_name: 'Safeway', raw_name: 'SIGNATURE BKRY SOURDGH', normalized_name: 'Sourdough Bread Loaf (24 oz)', category: 'Bakery', price: 4.99, unit: '24 oz', timestamp: Date.now() - 270 * 60 * 1000 },
+
+      // 10. Flour Tortillas (10 ct) - Bakery
+      { id: 's37', store_name: 'Aldi', raw_name: 'PUEBLO LINDO FLR TORT 10', normalized_name: 'Flour Tortillas (10 ct)', category: 'Bakery', price: 1.85, unit: '10 ct', timestamp: Date.now() - 55 * 60 * 1000 },
+      { id: 's38', store_name: "Trader Joe's", raw_name: 'TJ HOMESTYLE FLR TORT', normalized_name: 'Flour Tortillas (10 ct)', category: 'Bakery', price: 1.99, unit: '10 ct', timestamp: Date.now() - 105 * 60 * 1000 },
+      { id: 's39', store_name: 'Walmart', raw_name: 'MISSION SOFT TACO TORT', normalized_name: 'Flour Tortillas (10 ct)', category: 'Bakery', price: 2.28, unit: '10 ct', timestamp: Date.now() - 165 * 60 * 1000 },
+      { id: 's40', store_name: 'Safeway', raw_name: 'GUERRERO FAJITA TORT 10', normalized_name: 'Flour Tortillas (10 ct)', category: 'Bakery', price: 2.99, unit: '10 ct', timestamp: Date.now() - 230 * 60 * 1000 },
+
+      // 11. Extra Virgin Olive Oil (16.9 oz) - Pantry
+      { id: 's41', store_name: "Trader Joe's", raw_name: 'TJ KALAMATA EVOO 500ML', normalized_name: 'Extra Virgin Olive Oil (16.9 oz)', category: 'Pantry', price: 6.99, unit: '16.9 oz', timestamp: Date.now() - 65 * 60 * 1000 },
+      { id: 's42', store_name: 'Aldi', raw_name: 'CARLINI 100% EV OLIVE OIL', normalized_name: 'Extra Virgin Olive Oil (16.9 oz)', category: 'Pantry', price: 7.29, unit: '16.9 oz', timestamp: Date.now() - 125 * 60 * 1000 },
+      { id: 's43', store_name: 'Walmart', raw_name: 'GV EXTRA VIRGIN OLV OIL', normalized_name: 'Extra Virgin Olive Oil (16.9 oz)', category: 'Pantry', price: 7.84, unit: '17 oz', timestamp: Date.now() - 185 * 60 * 1000 },
+      { id: 's44', store_name: 'Safeway', raw_name: 'STAR EXTRA VIRGIN OO', normalized_name: 'Extra Virgin Olive Oil (16.9 oz)', category: 'Pantry', price: 9.99, unit: '16.9 oz', timestamp: Date.now() - 320 * 60 * 1000 },
+
+      // 12. Black Beans Canned (15 oz) - Pantry
+      { id: 's45', store_name: 'Aldi', raw_name: 'DAKOTA PRIDE BLK BEANS', normalized_name: 'Black Beans Canned (15 oz)', category: 'Pantry', price: 0.79, unit: '15 oz', timestamp: Date.now() - 48 * 60 * 1000 },
+      { id: 's46', store_name: 'Walmart', raw_name: 'GV BLACK BEANS 15OZ CAN', normalized_name: 'Black Beans Canned (15 oz)', category: 'Pantry', price: 0.86, unit: '15 oz', timestamp: Date.now() - 102 * 60 * 1000 },
+      { id: 's47', store_name: "Trader Joe's", raw_name: 'TJ ORG BLACK BEANS 15OZ', normalized_name: 'Black Beans Canned (15 oz)', category: 'Pantry', price: 0.99, unit: '15 oz', timestamp: Date.now() - 170 * 60 * 1000 },
+      { id: 's48', store_name: 'Safeway', raw_name: 'S&W PREMIUM BLK BEANS', normalized_name: 'Black Beans Canned (15 oz)', category: 'Pantry', price: 1.49, unit: '15 oz', timestamp: Date.now() - 260 * 60 * 1000 }
+    ];
+
+    // Pre-built realistic Sample Receipts for immediate 1-click testing
+    const SAMPLE_RECEIPTS = {
+      trader_joes: {
+        store_name: "Trader Joe's",
+        receipt_header: "TRADER JOE'S #142 • NEIGHBORHOOD MARKET",
+        receipt_date: "TODAY • 4:12 PM",
+        items: [
+          { raw_name: "TJ PASTURE LRG EGGS 12CT", normalized_name: "Large Eggs (1 Dozen)", category: "Dairy & Eggs", price: 3.29, unit: "12 ct" },
+          { raw_name: "ORG BANANAS BUNCH LB", normalized_name: "Organic Bananas (1 lb)", category: "Produce", price: 0.55, unit: "1 lb" },
+          { raw_name: "TJ SAN FRAN SOURDOUGH", normalized_name: "Sourdough Bread Loaf (24 oz)", category: "Bakery", price: 3.39, unit: "24 oz" },
+          { raw_name: "TJ HASS AVOCADO SINGLE", normalized_name: "Hass Avocados (Each)", category: "Produce", price: 0.89, unit: "1 ea" },
+          { raw_name: "TJ KALAMATA EVOO 500ML", normalized_name: "Extra Virgin Olive Oil (16.9 oz)", category: "Pantry", price: 6.79, unit: "16.9 oz" },
+          { raw_name: "TJ ORG BLACK BEANS 15OZ", normalized_name: "Black Beans Canned (15 oz)", category: "Pantry", price: 0.95, unit: "15 oz" }
+        ]
+      },
+      aldi: {
+        store_name: "Aldi",
+        receipt_header: "ALDI FOODS #088 • LOWEST PRICES",
+        receipt_date: "TODAY • 2:45 PM",
+        items: [
+          { raw_name: "GOLD HEN LRG EGGS DZ", normalized_name: "Large Eggs (1 Dozen)", category: "Dairy & Eggs", price: 2.49, unit: "12 ct" },
+          { raw_name: "FRIENDLY FARMS WHL MLK", normalized_name: "Whole Milk (1 Gallon)", category: "Dairy & Eggs", price: 3.09, unit: "1 gal" },
+          { raw_name: "KIRKWOOD BNLS CHKN BRST", normalized_name: "Boneless Skinless Chicken Breast (1 lb)", category: "Meat", price: 2.79, unit: "1 lb" },
+          { raw_name: "PUEBLO LINDO FLR TORT 10", normalized_name: "Flour Tortillas (10 ct)", category: "Bakery", price: 1.75, unit: "10 ct" },
+          { raw_name: "MED HASS AVOCADO EA", normalized_name: "Hass Avocados (Each)", category: "Produce", price: 0.69, unit: "1 ea" },
+          { raw_name: "ROMA TOMATOES PKG LB", normalized_name: "Roma Tomatoes (1 lb)", category: "Produce", price: 1.09, unit: "1 lb" }
+        ]
+      },
+      safeway: {
+        store_name: "Safeway",
+        receipt_header: "SAFEWAY STORE #1904 • MEMBER CLUB",
+        receipt_date: "TODAY • 5:02 PM",
+        items: [
+          { raw_name: "LUCERNE SLTD BTR 4QTR", normalized_name: "Salted Butter (1 lb)", category: "Dairy & Eggs", price: 3.49, unit: "16 oz" },
+          { raw_name: "SIGNATURE GRND BEEF 80", normalized_name: "Ground Beef 80/20 (1 lb)", category: "Meat", price: 4.29, unit: "1 lb" },
+          { raw_name: "VINE ROMA TOMATOES LB", normalized_name: "Roma Tomatoes (1 lb)", category: "Produce", price: 1.69, unit: "1 lb" },
+          { raw_name: "SIGNATURE BKRY SOURDGH", normalized_name: "Sourdough Bread Loaf (24 oz)", category: "Bakery", price: 4.49, unit: "24 oz" },
+          { raw_name: "S&W PREMIUM BLK BEANS", normalized_name: "Black Beans Canned (15 oz)", category: "Pantry", price: 1.29, unit: "15 oz" }
+        ]
+      },
+      walmart: {
+        store_name: "Walmart",
+        receipt_header: "WALMART SUPERCENTER • SAVE MONEY",
+        receipt_date: "TODAY • 3:20 PM",
+        items: [
+          { raw_name: "GV LRG WHT EGGS 12CT", normalized_name: "Large Eggs (1 Dozen)", category: "Dairy & Eggs", price: 2.84, unit: "12 ct" },
+          { raw_name: "GV WHOLE MILK 1GAL", normalized_name: "Whole Milk (1 Gallon)", category: "Dairy & Eggs", price: 3.22, unit: "1 gal" },
+          { raw_name: "ALL NAT GRND BEEF 80/20", normalized_name: "Ground Beef 80/20 (1 lb)", category: "Meat", price: 4.28, unit: "1 lb" },
+          { raw_name: "MISSION SOFT TACO TORT", normalized_name: "Flour Tortillas (10 ct)", category: "Bakery", price: 2.12, unit: "10 ct" },
+          { raw_name: "GV BLACK BEANS 15OZ CAN", normalized_name: "Black Beans Canned (15 oz)", category: "Pantry", price: 0.82, unit: "15 oz" },
+          { raw_name: "GV SWEET CRM BUTTER 1LB", normalized_name: "Salted Butter (1 lb)", category: "Dairy & Eggs", price: 3.58, unit: "16 oz" }
+        ]
+      }
+    };
+
+    // ------------------------------------------------------------
+    // 2. APPLICATION STATE
+    // ------------------------------------------------------------
+    let priceSightings = [];
+    let activeTab = 'board';
+    let selectedCategory = 'All';
+    let extractedDraft = {
+      store_name: '',
+      items: [],
+      mode: 'demo' // 'gemini' or 'demo'
+    };
+    let lastUploadedImageBase64 = null;
+    let lastUploadedImageMime = 'image/jpeg';
+    let recentlyPublishedNames = new Set();
+    let smartCartQuickItems = [];
+
+    // ------------------------------------------------------------
+    // 3. INITIALIZATION & STORAGE HELPERS
+    // ------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDataFromStorage();
+      updateApiKeyStatusUI();
+      renderCategoryPills();
+      renderPriceBoard();
+      updateExistingNormalizedDatalist();
+      // Pre-populate Deal Finder with a default high-value meal so users can also see or run immediately
+      document.getElementById('dealFinderInput').value = 'Tacos for 4 (ground beef, tortillas, avocados, tomatoes, black beans)';
+      lucide.createIcons();
+    });
+
+    function loadDataFromStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_PRICES);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            priceSightings = parsed;
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not read saved prices from localStorage:', e);
+      }
+      priceSightings = JSON.parse(JSON.stringify(INITIAL_PRICE_SIGHTINGS));
+      saveDataToStorage();
+    }
+
+    function saveDataToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY_PRICES, JSON.stringify(priceSightings));
+      } catch (e) {
+        console.warn('Could not save prices to localStorage:', e);
+      }
+    }
+
+    function resetToDefaultData() {
+      priceSightings = JSON.parse(JSON.stringify(INITIAL_PRICE_SIGHTINGS));
+      recentlyPublishedNames.clear();
+      saveDataToStorage();
+      renderPriceBoard();
+      updateExistingNormalizedDatalist();
+      showToast('Demo price board reset to default 12 items across 4 stores.', 'emerald');
+    }
+
+    function getApiKey() {
+      return (localStorage.getItem(STORAGE_KEY_API) || '').trim();
+    }
+
+    function getSelectedModel() {
+      return localStorage.getItem(STORAGE_KEY_MODEL) || 'gemini-2.5-flash';
+    }
+
+    // ------------------------------------------------------------
+    // 4. GEMINI REST API HELPER WITH EXPONENTIAL BACKOFF
+    // ------------------------------------------------------------
+    async function callGeminiAPI(payload, preferredModel) {
+      const userKey = getApiKey();
+      const modelToUse = preferredModel || getSelectedModel();
+
+      // If user has provided a key, call their selected model directly.
+      // If user hasn't provided a key, attempt the Canvas runtime environment fallback on gemini-3-flash-preview / selected model.
+      const modelsToTry = userKey
+        ? [modelToUse]
+        : [modelToUse, 'gemini-3-flash-preview'];
+
+      let lastError = null;
+
+      for (const model of modelsToTry) {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(userKey)}`;
+        const delays = [1000, 2000, 4000];
+
+        for (let attempt = 0; attempt <= delays.length; attempt++) {
+          try {
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (!text) {
+                throw new Error('Gemini returned an empty response payload.');
+              }
+              return JSON.parse(text);
+            }
+
+            // If 400/401/403 (bad or missing API key), break retry loop immediately
+            if (response.status === 400 || response.status === 401 || response.status === 403) {
+              const errBody = await response.json().catch(() => ({}));
+              const errMsg = errBody?.error?.message || `HTTP ${response.status}: Invalid or missing Gemini API key.`;
+              lastError = new Error(errMsg);
+              break;
+            }
+
+            // Retry on 429 or 5xx
+            if (attempt < delays.length) {
+              await new Promise(r => setTimeout(r, delays[attempt]));
+              continue;
+            } else {
+              lastError = new Error(`Gemini API request failed with status ${response.status}.`);
+            }
+          } catch (err) {
+            lastError = err;
+            if (attempt < delays.length) {
+              await new Promise(r => setTimeout(r, delays[attempt]));
+            }
+          }
+        }
+      }
+
+      throw lastError || new Error('Unable to reach Gemini API.');
+    }
+
+    // ------------------------------------------------------------
+    // 5. NAVIGATION & UI HELPERS
+    // ------------------------------------------------------------
+    function switchTab(tabName) {
+      activeTab = tabName;
+      const tabs = ['board', 'scanner', 'dealfinder'];
+
+      tabs.forEach(t => {
+        const section = document.getElementById(`tab-${t}`);
+        const deskBtn = document.getElementById(`nav-${t}`);
+        const mobBtn = document.getElementById(`mob-nav-${t}`);
+
+        if (t === tabName) {
+          section.classList.remove('hidden');
+          if (deskBtn) {
+            deskBtn.className = 'nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white text-emerald-700 shadow-sm';
+          }
+          if (mobBtn) {
+            mobBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all bg-white text-emerald-700 shadow-sm';
+          }
+        } else {
+          section.classList.add('hidden');
+          if (deskBtn) {
+            deskBtn.className = 'nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-slate-600 hover:text-slate-900';
+          }
+          if (mobBtn) {
+            mobBtn.className = 'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all text-slate-600';
+          }
+        }
+      });
+
+      if (tabName === 'board') {
+        renderPriceBoard();
+      } else if (tabName === 'dealfinder') {
+        // Auto-run Deal Finder on first visit if results aren't visible yet
+        const resultsEl = document.getElementById('dealFinderResults');
+        if (resultsEl.classList.contains('hidden')) {
+          runDealFinder();
+        }
+      }
+
+      lucide.createIcons();
+    }
+
+    function showToast(message, variant = 'emerald') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgMap = {
+        emerald: 'bg-emerald-900 text-white border-emerald-700',
+        amber: 'bg-amber-900 text-white border-amber-700',
+        rose: 'bg-rose-900 text-white border-rose-700'
+      };
+      toast.className = `pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-xl text-xs sm:text-sm font-semibold transition-all duration-300 ${bgMap[variant] || bgMap.emerald}`;
+      toast.innerHTML = `
+        <div class="flex items-center gap-2.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+          <span>${escapeHtml(message)}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white ml-2">✕</button>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 4200);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatRelativeTime(timestamp) {
+      const diffSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+      if (diffSeconds < 90) return 'Just now';
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      if (diffMinutes < 60) return `${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    }
+
+    // ------------------------------------------------------------
+    // 6. API KEY MODAL LOGIC
+    // ------------------------------------------------------------
+    function openApiModal() {
+      const modal = document.getElementById('apiModal');
+      document.getElementById('geminiApiKeyInput').value = getApiKey();
+      document.getElementById('geminiModelSelect').value = getSelectedModel();
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeApiModal() {
+      const modal = document.getElementById('apiModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function toggleApiKeyVisibility() {
+      const input = document.getElementById('geminiApiKeyInput');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function saveApiSettings() {
+      const key = document.getElementById('geminiApiKeyInput').value.trim();
+      const model = document.getElementById('geminiModelSelect').value;
+      if (key) {
+        localStorage.setItem(STORAGE_KEY_API, key);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_API);
+      }
+      localStorage.setItem(STORAGE_KEY_MODEL, model);
+      updateApiKeyStatusUI();
+      closeApiModal();
+      showToast(key ? `Gemini API key saved (${model}).` : 'Using Demo / Canvas Mode.', 'emerald');
+    }
+
+    function clearSavedApiKey() {
+      localStorage.removeItem(STORAGE_KEY_API);
+      document.getElementById('geminiApiKeyInput').value = '';
+      updateApiKeyStatusUI();
+      showToast('Saved Gemini API key cleared from localStorage.', 'amber');
+    }
+
+    function updateApiKeyStatusUI() {
+      const key = getApiKey();
+      const dot = document.getElementById('apiKeyStatusDot');
+      const label = document.getElementById('apiKeyHeaderLabel');
+      if (key) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        label.textContent = 'API Key Active';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        label.textContent = 'Settings / API Key';
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 7. LIVE PRICE COMPARISON BOARD LOGIC
+    // ------------------------------------------------------------
+    function groupItemsByNormalizedName() {
+      const groupsMap = new Map();
+
+      for (const sighting of priceSightings) {
+        const normKey = sighting.normalized_name.trim().toLowerCase();
+        if (!groupsMap.has(normKey)) {
+          groupsMap.set(normKey, {
+            normalized_name: sighting.normalized_name.trim(),
+            category: sighting.category || 'Pantry',
+            unit: sighting.unit || '1 unit',
+            sightingsByStore: new Map(),
+            latestTimestamp: sighting.timestamp
+          });
+        }
+        const group = groupsMap.get(normKey);
+        if (sighting.timestamp > group.latestTimestamp) {
+          group.latestTimestamp = sighting.timestamp;
+          group.normalized_name = sighting.normalized_name.trim();
+        }
+        // Keep the most recent sighting per store for clean store-to-store ranking
+        const storeKey = sighting.store_name.trim();
+        const existingStoreSighting = group.sightingsByStore.get(storeKey);
+        if (!existingStoreSighting || sighting.timestamp >= existingStoreSighting.timestamp) {
+          group.sightingsByStore.set(storeKey, sighting);
+        }
+      }
+
+      const groupedArray = [];
+      for (const group of groupsMap.values()) {
+        const rankedStores = Array.from(group.sightingsByStore.values()).sort((a, b) => a.price - b.price);
+        const lowestPrice = rankedStores[0]?.price ?? 0;
+        const highestPrice = rankedStores[rankedStores.length - 1]?.price ?? lowestPrice;
+        const maxSavings = Math.max(0, highestPrice - lowestPrice);
+        const savingsPct = highestPrice > 0 ? Math.round((maxSavings / highestPrice) * 100) : 0;
+
+        groupedArray.push({
+          ...group,
+          rankedStores,
+          lowestPrice,
+          highestPrice,
+          maxSavings,
+          savingsPct
+        });
+      }
+
+      return groupedArray;
+    }
+
+    function renderCategoryPills() {
+      const container = document.getElementById('categoryFilterContainer');
+      const allGroups = groupItemsByNormalizedName();
+
+      container.innerHTML = CATEGORIES.map(cat => {
+        const count = cat === 'All'
+          ? allGroups.length
+          : allGroups.filter(g => g.category === cat).length;
+        const isActive = selectedCategory === cat;
+        return `
+          <button
+            onclick="selectCategory('${escapeHtml(cat)}')"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              isActive
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-slate-100 hover:bg-slate-200/70 text-slate-700'
+            }"
+          >
+            <span>${escapeHtml(cat)}</span>
+            <span class="px-1.5 py-0.5 rounded-full text-[10px] ${
+              isActive ? 'bg-emerald-800 text-emerald-100' : 'bg-white text-slate-600'
+            }">${count}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectCategory(cat) {
+      selectedCategory = cat;
+      renderCategoryPills();
+      renderPriceBoard();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      renderPriceBoard();
+    }
+
+    function resetBoardFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('storeFilter').value = 'ALL';
+      document.getElementById('sortOrder').value = 'savings';
+      selectedCategory = 'All';
+      renderCategoryPills();
+      renderPriceBoard();
+    }
+
+    function renderStoreOverviewCards(groups) {
+      const stores = ['Aldi', "Trader Joe's", 'Walmart', 'Safeway'];
+      const statsByStore = {};
+      stores.forEach(s => {
+        statsByStore[s] = { wins: 0, totalBasket: 0, count: 0 };
+      });
+
+      groups.forEach(g => {
+        const bestPrice = g.lowestPrice;
+        g.rankedStores.forEach(s => {
+          if (!statsByStore[s.store_name]) {
+            statsByStore[s.store_name] = { wins: 0, totalBasket: 0, count: 0 };
+          }
+          statsByStore[s.store_name].totalBasket += s.price;
+          statsByStore[s.store_name].count += 1;
+          if (Math.abs(s.price - bestPrice) < 0.001) {
+            statsByStore[s.store_name].wins += 1;
+          }
+        });
+      });
+
+      const container = document.getElementById('storeOverviewCards');
+      container.innerHTML = stores.map(store => {
+        const st = statsByStore[store] || { wins: 0, totalBasket: 0, count: 0 };
+        return `
+          <div
+            onclick="filterByStoreFromCard('${escapeHtml(store)}')"
+            class="bg-emerald-950/50 hover:bg-emerald-950/75 border border-emerald-700/60 rounded-xl p-3 cursor-pointer transition-all"
+          >
+            <div class="flex items-center justify-between text-xs text-emerald-200/90">
+              <span class="font-bold text-white truncate">${escapeHtml(store)}</span>
+              <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
+                ${st.wins} Best ${st.wins === 1 ? 'Price' : 'Prices'}
+              </span>
+            </div>
+            <div class="mt-1.5 flex items-baseline justify-between">
+              <span class="text-lg font-extrabold text-white">$${st.totalBasket.toFixed(2)}</span>
+              <span class="text-[11px] text-emerald-300/80">${st.count} items tracked</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterByStoreFromCard(storeName) {
+      const select = document.getElementById('storeFilter');
+      select.value = select.value === storeName ? 'ALL' : storeName;
+      renderPriceBoard();
+    }
+
+    function renderPriceBoard() {
+      const searchVal = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+      const storeVal = document.getElementById('storeFilter')?.value || 'ALL';
+      const sortVal = document.getElementById('sortOrder')?.value || 'savings';
+
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !searchVal);
+      }
+
+      const allGroups = groupItemsByNormalizedName();
+
+      // Update header stats
+      document.getElementById('statTotalSightings').textContent = priceSightings.length;
+      document.getElementById('statTotalItems').textContent = allGroups.length;
+      document.getElementById('navBadgeCount').textContent = allGroups.length;
+
+      renderStoreOverviewCards(allGroups);
+      renderCategoryPills();
+
+      // Filter groups
+      let filtered = allGroups.filter(group => {
+        if (selectedCategory !== 'All' && group.category !== selectedCategory) {
+          return false;
+        }
+        if (storeVal !== 'ALL') {
+          const hasStore = group.rankedStores.some(s => s.store_name === storeVal);
+          if (!hasStore) return false;
+        }
+        if (searchVal) {
+          const matchName = group.normalized_name.toLowerCase().includes(searchVal);
+          const matchCat = group.category.toLowerCase().includes(searchVal);
+          const matchRawOrStore = group.rankedStores.some(s =>
+            s.raw_name.toLowerCase().includes(searchVal) ||
+            s.store_name.toLowerCase().includes(searchVal)
+          );
+          if (!matchName && !matchCat && !matchRawOrStore) return false;
+        }
+        return true;
+      });
+
+      // Sort groups
+      filtered.sort((a, b) => {
+        if (sortVal === 'savings') return b.maxSavings - a.maxSavings;
+        if (sortVal === 'recent') return b.latestTimestamp - a.latestTimestamp;
+        if (sortVal === 'lowest') return a.lowestPrice - b.lowestPrice;
+        if (sortVal === 'alpha') return a.normalized_name.localeCompare(b.normalized_name);
+        return 0;
+      });
+
+      const grid = document.getElementById('priceBoardGrid');
+      const emptyState = document.getElementById('emptyBoardState');
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        lucide.createIcons();
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      grid.innerHTML = filtered.map(group => {
+        const catMeta = CATEGORY_META[group.category] || CATEGORY_META['Pantry'];
+        const isJustPublished = recentlyPublishedNames.has(group.normalized_name.toLowerCase());
+        const winner = group.rankedStores[0];
+
+        const storeRowsHtml = group.rankedStores.map((sighting, idx) => {
+          const isBest = idx === 0;
+          const isSelectedStore = storeVal !== 'ALL' && sighting.store_name === storeVal;
+          const diffFromBest = sighting.price - group.lowestPrice;
+          const storeStyle = STORE_BADGE_STYLES[sighting.store_name] || { dot: 'bg-emerald-500', badge: 'bg-slate-100 text-slate-800 border-slate-200' };
+
+          return `
+            <div class="flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+              isBest
+                ? 'bg-emerald-50/90 border-emerald-300 shadow-sm'
+                : isSelectedStore
+                ? 'bg-amber-50/60 border-amber-300'
+                : 'bg-slate-50/70 border-slate-200/70 hover:bg-slate-100/70'
+            }">
+              <div class="min-w-0 flex-1 pr-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="w-2 h-2 rounded-full ${storeStyle.dot} shrink-0"></span>
+                  <span class="text-xs sm:text-sm font-bold text-slate-900">${escapeHtml(sighting.store_name)}</span>
+                  ${
+                    isBest
+                      ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-600 text-white shadow-sm">
+                          ★ Best Price
+                        </span>`
+                      : `<span class="text-[11px] font-medium text-slate-400">+$${diffFromBest.toFixed(2)}</span>`
+                  }
+                </div>
+                <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
+                  <span class="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 truncate max-w-[170px]" title="Receipt raw code: ${escapeHtml(sighting.raw_name)}">
+                    ${escapeHtml(sighting.raw_name)}
+                  </span>
+                  <span>•</span>
+                  <span class="${sighting.timestamp > Date.now() - 90000 ? 'text-emerald-700 font-bold' : ''}">
+                    ${formatRelativeTime(sighting.timestamp)}
+                  </span>
+                </div>
+              </div>
+
+              <div class="text-right shrink-0">
+                <div class="text-base sm:text-lg font-extrabold ${isBest ? 'text-emerald-700' : 'text-slate-800'}">
+                  $${sighting.price.toFixed(2)}
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium">${escapeHtml(sighting.unit || group.unit)}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <article class="bg-white rounded-2xl border ${
+            isJustPublished ? 'border-emerald-500 ring-2 ring-emerald-500/20 animate-pulse-emerald' : 'border-slate-200'
+          } shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+            <div>
+              <!-- Card Top Header -->
+              <div class="p-4 sm:p-5 border-b border-slate-100">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${catMeta.badgeClass}">
+                    <i data-lucide="${catMeta.icon}" class="w-3.5 h-3.5"></i>
+                    <span>${escapeHtml(group.category)}</span>
+                  </span>
+                  ${
+                    group.maxSavings > 0
+                      ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Save up to $${group.maxSavings.toFixed(2)} (${group.savingsPct}%)
+                        </span>`
+                      : `<span class="text-xs text-slate-400">1 store logged</span>`
+                  }
+                </div>
+
+                <h3 class="text-base sm:text-lg font-extrabold text-slate-900 leading-snug">
+                  ${escapeHtml(group.normalized_name)}
+                </h3>
+
+                <div class="mt-2 flex items-baseline justify-between">
+                  <div class="text-xs text-slate-500">
+                    Lowest at <strong class="text-emerald-700">${escapeHtml(winner?.store_name || 'N/A')}</strong>
+                  </div>
+                  <div class="text-xs text-slate-400">
+                    ${group.rankedStores.length} ${group.rankedStores.length === 1 ? 'store' : 'stores'} compared
+                  </div>
+                </div>
+              </div>
+
+              <!-- Ranked Store Rows -->
+              <div class="p-3.5 sm:p-4 space-y-2">
+                ${storeRowsHtml}
+              </div>
+            </div>
+
+            <!-- Card Footer Actions -->
+            <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button
+                onclick="prefillManualModalForItem('${escapeHtml(group.normalized_name)}', '${escapeHtml(group.category)}', '${escapeHtml(group.unit)}')"
+                class="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-emerald-700 transition-colors"
+              >
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                <span>Update Price</span>
+              </button>
+
+              <button
+                onclick="addItemToDealFinder('${escapeHtml(group.normalized_name)}')"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all"
+              >
+                <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                <span>+ Smart Cart</span>
+              </button>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function updateExistingNormalizedDatalist() {
+      const groups = groupItemsByNormalizedName();
+      const datalist = document.getElementById('existingNormalizedNamesList');
+      if (!datalist) return;
+      datalist.innerHTML = groups
+        .map(g => `<option value="${escapeHtml(g.normalized_name)}"></option>`)
+        .join('');
+    }
+
+    // ------------------------------------------------------------
+    // 8. MANUAL SINGLE PRICE LOGGING MODAL
+    // ------------------------------------------------------------
+    function openManualPriceModal() {
+      const modal = document.getElementById('manualPriceModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeManualPriceModal() {
+      const modal = document.getElementById('manualPriceModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function prefillManualModalForItem(normalizedName, category, unit) {
+      document.getElementById('manualNormalizedInput').value = normalizedName;
+      document.getElementById('manualCategoryInput').value = category;
+      document.getElementById('manualUnitInput').value = unit || '1 unit';
+      document.getElementById('manualPriceInput').value = '';
+      document.getElementById('manualRawInput').value = '';
+      openManualPriceModal();
+    }
+
+    function submitManualPrice() {
+      const store_name = document.getElementById('manualStoreInput').value.trim() || 'Aldi';
+      const normalized_name = document.getElementById('manualNormalizedInput').value.trim();
+      const category = document.getElementById('manualCategoryInput').value;
+      const priceVal = parseFloat(document.getElementById('manualPriceInput').value);
+      const unit = document.getElementById('manualUnitInput').value.trim() || '1 unit';
+      const raw_name = document.getElementById('manualRawInput').value.trim() || normalized_name.toUpperCase().slice(0, 18);
+
+      if (!normalized_name) {
+        showToast('Please enter a standardized product name.', 'rose');
+        return;
+      }
+      if (isNaN(priceVal) || priceVal <= 0) {
+        showToast('Please enter a valid positive price.', 'rose');
+        return;
+      }
+
+      priceSightings.unshift({
+        id: 'manual_' + Date.now(),
+        store_name,
+        raw_name,
+        normalized_name,
+        category,
+        price: Math.round(priceVal * 100) / 100,
+        unit,
+        timestamp: Date.now()
+      });
+
+      recentlyPublishedNames.add(normalized_name.toLowerCase());
+      saveDataToStorage();
+      updateExistingNormalizedDatalist();
+      closeManualPriceModal();
+      renderPriceBoard();
+      showToast(`Logged ${normalized_name} ($${priceVal.toFixed(2)}) at ${store_name}!`, 'emerald');
+    }
+
+    // ------------------------------------------------------------
+    // 9. GEMINI VISION RECEIPT SCANNER & DEMO SAMPLE GENERATOR
+    // ------------------------------------------------------------
+    function triggerSampleReceiptFlow() {
+      switchTab('scanner');
+      loadSelectedSampleReceipt();
+    }
+
+    function generateSyntheticReceiptDataUrl(receiptObj) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 480;
+      const itemCount = receiptObj.items.length;
+      canvas.height = 250 + itemCount * 36;
+      const ctx = canvas.getContext('2d');
+
+      // Paper background
+      ctx.fillStyle = '#fffef9';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle receipt texture stripes
+      ctx.fillStyle = '#f8fafc';
+      for (let y = 0; y < canvas.height; y += 8) {
+        ctx.fillRect(0, y, canvas.width, 2);
+      }
+
+      // Store Header
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 20px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(receiptObj.store_name.toUpperCase(), canvas.width / 2, 42);
+
+      ctx.font = '12px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#475569';
+      ctx.fillText(receiptObj.receipt_header || 'LOCAL NEIGHBORHOOD GROCER', canvas.width / 2, 64);
+      ctx.fillText(receiptObj.receipt_date || 'TODAY', canvas.width / 2, 82);
+
+      // Dashed divider
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('----------------------------------------------', 28, 106);
+      ctx.font = 'bold 12px "JetBrains Mono", monospace';
+      ctx.fillText('ITEM DESCRIPTION                     PRICE', 28, 126);
+      ctx.font = '12px "JetBrains Mono", monospace';
+      ctx.fillText('----------------------------------------------', 28, 144);
+
+      // Line Items
+      let y = 172;
+      let total = 0;
+      receiptObj.items.forEach(item => {
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '600 13px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.raw_name.padEnd(28, ' '), 28, y);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(`$${Number(item.price).toFixed(2)}`, canvas.width - 28, y);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#10b981';
+        ctx.font = '10px "Inter", sans-serif';
+        ctx.fillText(`↳ Normalized: ${item.normalized_name} (${item.category})`, 32, y + 14);
+
+        total += Number(item.price);
+        y += 36;
+      });
+
+      // Footer Total
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px "JetBrains Mono", monospace';
+      ctx.fillText('----------------------------------------------', 28, y);
+      y += 22;
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 16px "JetBrains Mono", monospace';
+      ctx.fillText('SUBTOTAL', 28, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(`$${total.toFixed(2)}`, canvas.width - 28, y);
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function loadSelectedSampleReceipt() {
+      const select = document.getElementById('sampleReceiptSelect');
+      const key = select?.value || 'trader_joes';
+      const sample = SAMPLE_RECEIPTS[key] || SAMPLE_RECEIPTS.trader_joes;
+
+      // Render synthetic receipt image preview
+      const dataUrl = generateSyntheticReceiptDataUrl(sample);
+      const previewContainer = document.getElementById('receiptPreviewContainer');
+      const previewImg = document.getElementById('receiptImagePreview');
+      const previewLabel = document.getElementById('receiptPreviewLabel');
+      const rescanBtn = document.getElementById('rescanWithGeminiBtn');
+
+      previewImg.src = dataUrl;
+      previewLabel.textContent = `Sample Receipt: ${sample.store_name}`;
+      previewContainer.classList.remove('hidden');
+      rescanBtn.classList.add('hidden');
+
+      // Show brief realistic scanning animation then populate editable confirmation list
+      document.getElementById('scannerIdleState').classList.add('hidden');
+      document.getElementById('scannerErrorState').classList.add('hidden');
+      document.getElementById('scannerResultsContainer').classList.add('hidden');
+      document.getElementById('scannerLoadingState').classList.remove('hidden');
+      document.getElementById('scannerLoadingTitle').textContent = `Scanning ${sample.store_name} Sample Receipt...`;
+
+      setTimeout(() => {
+        document.getElementById('scannerLoadingState').classList.add('hidden');
+        extractedDraft = {
+          store_name: sample.store_name,
+          items: JSON.parse(JSON.stringify(sample.items)),
+          mode: 'demo'
+        };
+        renderExtractedConfirmationList();
+        showToast(`Extracted ${sample.items.length} items from ${sample.store_name} sample receipt.`, 'emerald');
+      }, 450);
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('receiptDropzone').classList.add('border-emerald-500', 'bg-emerald-50/50');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('receiptDropzone').classList.remove('border-emerald-500', 'bg-emerald-50/50');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('receiptDropzone').classList.remove('border-emerald-500', 'bg-emerald-50/50');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) {
+        processReceiptFile(file);
+      }
+    }
+
+    function handleReceiptFileSelect(e) {
+      const file = e.target?.files?.[0];
+      if (file) {
+        processReceiptFile(file);
+      }
+    }
+
+    function processReceiptFile(file) {
+      if (!file.type.startsWith('image/')) {
+        showToast('Please select a valid image file (PNG, JPG, WEBP).', 'rose');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target.result;
+        const base64Data = dataUrl.split(',')[1];
+        lastUploadedImageBase64 = base64Data;
+        lastUploadedImageMime = file.type || 'image/jpeg';
+
+        // Show image preview
+        const previewContainer = document.getElementById('receiptPreviewContainer');
+        const previewImg = document.getElementById('receiptImagePreview');
+        const previewLabel = document.getElementById('receiptPreviewLabel');
+        const rescanBtn = document.getElementById('rescanWithGeminiBtn');
+
+        previewImg.src = dataUrl;
+        previewLabel.textContent = `Uploaded: ${file.name}`;
+        previewContainer.classList.remove('hidden');
+        rescanBtn.classList.remove('hidden');
+
+        await scanUploadedImageWithGemini();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function scanUploadedImageWithGemini() {
+      if (!lastUploadedImageBase64) {
+        showToast('Please upload a receipt image first.', 'amber');
+        return;
+      }
+
+      document.getElementById('scannerIdleState').classList.add('hidden');
+      document.getElementById('scannerErrorState').classList.add('hidden');
+      document.getElementById('scannerResultsContainer').classList.add('hidden');
+      document.getElementById('scannerLoadingState').classList.remove('hidden');
+      document.getElementById('scannerLoadingTitle').textContent = 'Gemini Vision is Reading Your Receipt...';
+
+      const existingItemsList = groupItemsByNormalizedName().map(g => g.normalized_name).join(', ');
+
+      const promptText = `You are an expert grocery receipt parser for LocalBasket.
+Extract the grocery store name and all purchased grocery line items from this receipt image.
+Rules:
+1. Standardize "store_name" (e.g., "Trader Joe's", "Aldi", "Safeway", "Walmart", "Kroger", "Whole Foods", "Target").
+2. For each line item:
+   - "raw_name": the exact abbreviated text printed on the receipt (e.g. "ORG LRG EGGS 12CT").
+   - "normalized_name": convert cryptic receipt abbreviations into a clean, human-readable standard product name with standard unit size in parentheses, e.g. "Large Eggs (1 Dozen)", "Whole Milk (1 Gallon)", "Hass Avocados (Each)". When an item matches one of our existing tracked names [${existingItemsList}], use that exact normalized_name so prices group together.
+   - "category": MUST be one of: "Dairy & Eggs", "Produce", "Pantry", "Bakery", "Meat".
+   - "price": numeric item price (number, e.g., 3.49).
+   - "unit": short unit description (e.g., "12 ct", "1 gal", "1 lb", "16 oz", "1 ea").`;
+
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: promptText },
+              {
+                inlineData: {
+                  mimeType: lastUploadedImageMime,
+                  data: lastUploadedImageBase64
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              store_name: { type: 'STRING' },
+              items: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    raw_name: { type: 'STRING' },
+                    normalized_name: { type: 'STRING' },
+                    category: { type: 'STRING' },
+                    price: { type: 'NUMBER' },
+                    unit: { type: 'STRING' }
+                  },
+                  required: ['raw_name', 'normalized_name', 'category', 'price', 'unit']
+                }
+              }
+            },
+            required: ['store_name', 'items']
+          }
+        }
+      };
+
+      try {
+        const resultJson = await callGeminiAPI(payload);
+        document.getElementById('scannerLoadingState').classList.add('hidden');
+
+        const validCategories = ['Dairy & Eggs', 'Produce', 'Pantry', 'Bakery', 'Meat'];
+        const cleanedItems = (resultJson.items || []).map(it => ({
+          raw_name: it.raw_name || 'RECEIPT ITEM',
+          normalized_name: it.normalized_name || 'Grocery Item',
+          category: validCategories.includes(it.category) ? it.category : 'Pantry',
+          price: typeof it.price === 'number' && !isNaN(it.price) ? it.price : 0,
+          unit: it.unit || '1 unit'
+        }));
+
+        extractedDraft = {
+          store_name: resultJson.store_name || "Trader Joe's",
+          items: cleanedItems,
+          mode: 'gemini'
+        };
+
+        renderExtractedConfirmationList();
+        showToast(`Gemini Vision extracted ${cleanedItems.length} items from ${extractedDraft.store_name}!`, 'emerald');
+      } catch (err) {
+        console.warn('Gemini Vision receipt scan error:', err);
+        document.getElementById('scannerLoadingState').classList.add('hidden');
+        const errBox = document.getElementById('scannerErrorState');
+        const errTitle = document.getElementById('scannerErrorTitle');
+        const errMsg = document.getElementById('scannerErrorMessage');
+
+        errBox.classList.remove('hidden');
+        if (!getApiKey()) {
+          errTitle.textContent = 'Gemini API Key Required for Custom Photo Upload';
+          errMsg.textContent = 'To parse custom receipt images via Gemini Vision, click "Set API Key" and paste your free Gemini API key, or click "Use Demo Extraction Instead" to test the confirmation workflow.';
+        } else {
+          errTitle.textContent = 'Gemini Vision API Error';
+          errMsg.textContent = err.message || 'Could not parse the uploaded receipt image. Check your API key or try a clearer image.';
+        }
+        lucide.createIcons();
+      }
+    }
+
+    function renderExtractedConfirmationList() {
+      const container = document.getElementById('scannerResultsContainer');
+      const listEl = document.getElementById('extractedItemsList');
+      const storeInput = document.getElementById('extractedStoreName');
+      const modeBadge = document.getElementById('extractionModeBadge');
+
+      container.classList.remove('hidden');
+      storeInput.value = extractedDraft.store_name || "Trader Joe's";
+      storeInput.oninput = (e) => {
+        extractedDraft.store_name = e.target.value;
+      };
+
+      if (extractedDraft.mode === 'gemini') {
+        modeBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800';
+        modeBadge.innerHTML = `<i data-lucide="sparkles" class="w-3 h-3"></i><span>Gemini Vision JSON Extracted</span>`;
+      } else {
+        modeBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-800';
+        modeBadge.innerHTML = `<i data-lucide="wand-2" class="w-3 h-3"></i><span>Sample Receipt Demo Mode</span>`;
+      }
+
+      const categoryOptions = ['Dairy & Eggs', 'Produce', 'Meat', 'Bakery', 'Pantry'];
+
+      listEl.innerHTML = extractedDraft.items.map((item, idx) => `
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/90 space-y-2.5">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <!-- Normalized Name -->
+            <div class="flex-1">
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                Normalized Name (Standardized)
+              </label>
+              <input
+                type="text"
+                list="existingNormalizedNamesList"
+                value="${escapeHtml(item.normalized_name)}"
+                oninput="updateExtractedItem(${idx}, 'normalized_name', this.value)"
+                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <!-- Price -->
+            <div class="w-full sm:w-28">
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                Price ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value="${Number(item.price).toFixed(2)}"
+                oninput="updateExtractedItem(${idx}, 'price', parseFloat(this.value) || 0)"
+                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-extrabold text-emerald-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+            <!-- Raw Receipt Abbreviation -->
+            <div class="sm:col-span-5">
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                Raw Receipt Code
+              </label>
+              <input
+                type="text"
+                value="${escapeHtml(item.raw_name)}"
+                oninput="updateExtractedItem(${idx}, 'raw_name', this.value)"
+                class="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-mono text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <!-- Category -->
+            <div class="sm:col-span-4">
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                Category
+              </label>
+              <select
+                onchange="updateExtractedItem(${idx}, 'category', this.value)"
+                class="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                ${categoryOptions.map(c => `<option value="${escapeHtml(c)}" ${item.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              </select>
+            </div>
+
+            <!-- Unit + Remove Button -->
+            <div class="sm:col-span-3 flex items-center gap-1.5">
+              <div class="flex-1">
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                  Unit
+                </label>
+                <input
+                  type="text"
+                  value="${escapeHtml(item.unit || '1 unit')}"
+                  oninput="updateExtractedItem(${idx}, 'unit', this.value)"
+                  class="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <button
+                onclick="removeExtractedItem(${idx})"
+                class="mt-4 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                title="Remove item"
+              >
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      updateExtractedSummaryTotals();
+      lucide.createIcons();
+    }
+
+    function updateExtractedItem(idx, field, value) {
+      if (!extractedDraft.items[idx]) return;
+      extractedDraft.items[idx][field] = value;
+      if (field === 'price') {
+        updateExtractedSummaryTotals();
+      }
+    }
+
+    function removeExtractedItem(idx) {
+      extractedDraft.items.splice(idx, 1);
+      renderExtractedConfirmationList();
+    }
+
+    function addBlankExtractedItem() {
+      extractedDraft.items.push({
+        raw_name: 'CUSTOM ITEM',
+        normalized_name: 'Large Eggs (1 Dozen)',
+        category: 'Dairy & Eggs',
+        price: 2.99,
+        unit: '12 ct'
+      });
+      renderExtractedConfirmationList();
+    }
+
+    function updateExtractedSummaryTotals() {
+      const count = extractedDraft.items.length;
+      const total = extractedDraft.items.reduce((acc, it) => acc + (Number(it.price) || 0), 0);
+      document.getElementById('extractedCountSummary').textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
+      document.getElementById('extractedTotalSummary').textContent = `$${total.toFixed(2)}`;
+    }
+
+    function clearScannerResults() {
+      extractedDraft = { store_name: '', items: [], mode: 'demo' };
+      document.getElementById('scannerResultsContainer').classList.add('hidden');
+      document.getElementById('scannerErrorState').classList.add('hidden');
+      document.getElementById('scannerIdleState').classList.remove('hidden');
+    }
+
+    function publishExtractedItems() {
+      const storeName = (document.getElementById('extractedStoreName').value || extractedDraft.store_name || "Trader Joe's").trim();
+      const validItems = extractedDraft.items.filter(it => it.normalized_name && Number(it.price) > 0);
+
+      if (validItems.length === 0) {
+        showToast('Please include at least one valid item with a price greater than $0.', 'rose');
+        return;
+      }
+
+      recentlyPublishedNames.clear();
+      const now = Date.now();
+
+      validItems.forEach((it, idx) => {
+        priceSightings.unshift({
+          id: `scan_${now}_${idx}`,
+          store_name: storeName,
+          raw_name: (it.raw_name || it.normalized_name).trim(),
+          normalized_name: it.normalized_name.trim(),
+          category: it.category || 'Pantry',
+          price: Math.round(Number(it.price) * 100) / 100,
+          unit: (it.unit || '1 unit').trim(),
+          timestamp: now
+        });
+        recentlyPublishedNames.add(it.normalized_name.trim().toLowerCase());
+      });
+
+      saveDataToStorage();
+      updateExistingNormalizedDatalist();
+
+      // Update live ticker
+      document.getElementById('liveTickerText').textContent =
+        `Just published ${validItems.length} verified prices from ${storeName} — Lowest sightings updated!`;
+
+      showToast(`Published ${validItems.length} items from ${storeName} to the Live Price Board!`, 'emerald');
+      switchTab('board');
+    }
+
+    // ------------------------------------------------------------
+    // 10. AI SMART CART / DEAL FINDER (GEMINI API + SMART FALLBACK)
+    // ------------------------------------------------------------
+    function addItemToDealFinder(normalizedName) {
+      if (!smartCartQuickItems.includes(normalizedName)) {
+        smartCartQuickItems.push(normalizedName);
+      }
+      const badge = document.getElementById('smartListBadge');
+      badge.textContent = smartCartQuickItems.length;
+      badge.classList.remove('hidden');
+
+      const input = document.getElementById('dealFinderInput');
+      input.value = `Shopping list: ${smartCartQuickItems.join(', ')}`;
+      showToast(`Added "${normalizedName}" to AI Deal Finder list.`, 'emerald');
+    }
+
+    function selectDealPreset(presetText) {
+      document.getElementById('dealFinderInput').value = presetText;
+      runDealFinder();
+    }
+
+    // Local deterministic basket optimizer (used both to ground data and as instant fallback)
+    function computeLocalDealAnalysis(queryText) {
+      const groups = groupItemsByNormalizedName();
+      const q = queryText.toLowerCase();
+
+      // Meal keyword expansion so queries like "Tacos for 4" or "Breakfast" match the right items automatically
+      const keywordRules = [
+        { triggers: ['taco', 'fajita', 'burrito', 'mexican', 'tex-mex'], matches: ['Ground Beef 80/20 (1 lb)', 'Flour Tortillas (10 ct)', 'Hass Avocados (Each)', 'Roma Tomatoes (1 lb)', 'Black Beans Canned (15 oz)'] },
+        { triggers: ['breakfast', 'brunch', 'omelet', 'morning', 'toast'], matches: ['Large Eggs (1 Dozen)', 'Sourdough Bread Loaf (24 oz)', 'Hass Avocados (Each)', 'Organic Bananas (1 lb)', 'Whole Milk (1 Gallon)', 'Salted Butter (1 lb)'] },
+        { triggers: ['protein', 'prep', 'gym', 'chicken', 'fitness'], matches: ['Boneless Skinless Chicken Breast (1 lb)', 'Ground Beef 80/20 (1 lb)', 'Large Eggs (1 Dozen)', 'Black Beans Canned (15 oz)', 'Extra Virgin Olive Oil (16.9 oz)'] },
+        { triggers: ['restock', 'full', 'everything', 'weekly', 'all'], matches: groups.map(g => g.normalized_name) }
+      ];
+
+      let matchedGroups = [];
+      const seenNames = new Set();
+
+      // 1. Direct token matching against normalized_name or category
+      groups.forEach(g => {
+        const nameLower = g.normalized_name.toLowerCase();
+        const words = nameLower.replace(/[()]/g, '').split(/\s+/).filter(w => w.length >= 3 && !['12', 'ct', 'lb', 'oz', 'gal', 'each', 'dozen', 'gallon'].includes(w));
+        if (words.some(w => q.includes(w))) {
+          matchedGroups.push(g);
+          seenNames.add(g.normalized_name);
+        }
+      });
+
+      // 2. Meal rule expansion
+      keywordRules.forEach(rule => {
+        if (rule.triggers.some(t => q.includes(t))) {
+          rule.matches.forEach(mName => {
+            const found = groups.find(g => g.normalized_name.toLowerCase() === mName.toLowerCase());
+            if (found && !seenNames.has(found.normalized_name)) {
+              matchedGroups.push(found);
+              seenNames.add(found.normalized_name);
+            }
+          });
+        }
+      });
+
+      // 3. If still empty, default to core staples
+      if (matchedGroups.length === 0) {
+        matchedGroups = groups.slice(0, 5);
+      }
+
+      const stores = ['Aldi', "Trader Joe's", 'Walmart', 'Safeway'];
+      const storeRankings = stores.map(storeName => {
+        let total = 0;
+        const items = matchedGroups.map(g => {
+          const storeEntry = g.rankedStores.find(s => s.store_name === storeName) || g.rankedStores[0];
+          const price = storeEntry ? storeEntry.price : g.lowestPrice;
+          total += price;
+          return {
+            normalized_name: g.normalized_name,
+            price,
+            is_best: Math.abs(price - g.lowestPrice) < 0.001
+          };
+        });
+        return { store_name: storeName, total: Math.round(total * 100) / 100, items };
+      }).sort((a, b) => a.total - b.total);
+
+      const singleStoreWinner = storeRankings[0];
+      const highestSingleStore = storeRankings[storeRankings.length - 1];
+
+      // Split-trip calculation (cherry-picking the lowest store for each item)
+      let splitTotal = 0;
+      const splitStopsMap = {};
+      matchedGroups.forEach(g => {
+        const best = g.rankedStores[0];
+        if (best) {
+          splitTotal += best.price;
+          if (!splitStopsMap[best.store_name]) {
+            splitStopsMap[best.store_name] = [];
+          }
+          splitStopsMap[best.store_name].push({
+            normalized_name: g.normalized_name,
+            price: best.price,
+            savings_vs_high: Math.max(0, g.highestPrice - best.price)
+          });
+        }
+      });
+      splitTotal = Math.round(splitTotal * 100) / 100;
+
+      const splitStops = Object.keys(splitStopsMap).map(store_name => ({
+        store_name,
+        subtotal: Math.round(splitStopsMap[store_name].reduce((s, i) => s + i.price, 0) * 100) / 100,
+        items: splitStopsMap[store_name]
+      }));
+
+      return {
+        query: queryText,
+        single_store_winner: {
+          store_name: singleStoreWinner.store_name,
+          total_cost: singleStoreWinner.total,
+          savings_vs_most_expensive: Math.round((highestSingleStore.total - singleStoreWinner.total) * 100) / 100,
+          rationale: `${singleStoreWinner.store_name} wins the single-stop basket at $${singleStoreWinner.total.toFixed(2)}, saving you $${(highestSingleStore.total - singleStoreWinner.total).toFixed(2)} compared to shopping at ${highestSingleStore.store_name} ($${highestSingleStore.total.toFixed(2)}).`,
+          items: singleStoreWinner.items
+        },
+        all_store_totals: storeRankings,
+        split_trip_plan: {
+          total_cost: splitTotal,
+          extra_savings_vs_single_winner: Math.round(Math.max(0, singleStoreWinner.total - splitTotal) * 100) / 100,
+          total_savings_vs_highest: Math.round(Math.max(0, highestSingleStore.total - splitTotal) * 100) / 100,
+          stops: splitStops
+        },
+        smart_tips: [
+          `Single-store trip at ${singleStoreWinner.store_name} costs $${singleStoreWinner.total.toFixed(2)} for all ${matchedGroups.length} items.`,
+          splitTotal < singleStoreWinner.total
+            ? `Splitting your trip across ${splitStops.map(s => s.store_name).join(' + ')} drops your total to $${splitTotal.toFixed(2)} (an extra $${(singleStoreWinner.total - splitTotal).toFixed(2)} saved).`
+            : `${singleStoreWinner.store_name} already has the lowest price on every single item in this basket—no split trip needed!`,
+          `Biggest individual price gap in your basket: ${matchedGroups.slice().sort((a, b) => b.maxSavings - a.maxSavings)[0]?.normalized_name} ($${matchedGroups.slice().sort((a, b) => b.maxSavings - a.maxSavings)[0]?.maxSavings.toFixed(2)} spread between stores).`
+        ]
+      };
+    }
+
+    async function runDealFinder() {
+      const inputEl = document.getElementById('dealFinderInput');
+      const queryText = (inputEl.value || '').trim() || 'Tacos for 4';
+
+      const loadingEl = document.getElementById('dealFinderLoading');
+      const resultsEl = document.getElementById('dealFinderResults');
+
+      resultsEl.classList.add('hidden');
+      loadingEl.classList.remove('hidden');
+
+      // Compute exact baseline from current price board
+      const localBaseline = computeLocalDealAnalysis(queryText);
+
+      // Prepare current price board snapshot for Gemini
+      const compactPriceBoard = groupItemsByNormalizedName().map(g => ({
+        item: g.normalized_name,
+        category: g.category,
+        prices: g.rankedStores.map(s => ({ store: s.store_name, price: s.price }))
+      }));
+
+      const hasKey = Boolean(getApiKey());
+
+      if (hasKey) {
+        try {
+          const prompt = `You are the LocalBasket AI Deal Finder.
+User shopping request: "${queryText}"
+Current live community grocery prices (JSON):
+${JSON.stringify(compactPriceBoard)}
+
+Analyze the user's request against our live store prices and return a JSON object with:
+1. "single_store_rationale": A concise, helpful 1-2 sentence explanation of why the cheapest single store wins for this meal/list and how much it saves vs the priciest store.
+2. "split_trip_advice": A 1-2 sentence recommendation on whether splitting the trip across stores is worth the extra stop.
+3. "smart_tips": Array of 3 specific, actionable money-saving tips referencing exact item prices from the data.`;
+
+          const payload = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'OBJECT',
+                properties: {
+                  single_store_rationale: { type: 'STRING' },
+                  split_trip_advice: { type: 'STRING' },
+                  smart_tips: {
+                    type: 'ARRAY',
+                    items: { type: 'STRING' }
+                  }
+                },
+                required: ['single_store_rationale', 'split_trip_advice', 'smart_tips']
+              }
+            }
+          };
+
+          const aiResult = await callGeminiAPI(payload);
+          if (aiResult.single_store_rationale) {
+            localBaseline.single_store_winner.rationale = aiResult.single_store_rationale;
+          }
+          if (aiResult.split_trip_advice) {
+            localBaseline.split_trip_advice = aiResult.split_trip_advice;
+          }
+          if (Array.isArray(aiResult.smart_tips) && aiResult.smart_tips.length > 0) {
+            localBaseline.smart_tips = aiResult.smart_tips;
+          }
+          localBaseline.poweredBy = `Gemini API (${getSelectedModel()})`;
+        } catch (err) {
+          console.warn('Deal Finder Gemini fallback used:', err);
+          localBaseline.poweredBy = 'LocalBasket Smart Optimizer (Demo / Offline Fallback)';
+        }
+      } else {
+        await new Promise(r => setTimeout(r, 350));
+        localBaseline.poweredBy = 'LocalBasket Smart Optimizer (Add API Key for Live Gemini Commentary)';
+      }
+
+      loadingEl.classList.add('hidden');
+      renderDealFinderResults(localBaseline);
+    }
+
+    function renderDealFinderResults(analysis) {
+      const resultsEl = document.getElementById('dealFinderResults');
+      resultsEl.classList.remove('hidden');
+
+      const winner = analysis.single_store_winner;
+      const split = analysis.split_trip_plan;
+      const maxStoreTotal = analysis.all_store_totals[analysis.all_store_totals.length - 1]?.total || 1;
+
+      const storeBarsHtml = analysis.all_store_totals.map((st, idx) => {
+        const pct = Math.max(20, Math.round((st.total / maxStoreTotal) * 100));
+        const isWinner = idx === 0;
+        return `
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold ${isWinner ? 'text-emerald-700' : 'text-slate-700'} flex items-center gap-1.5">
+                ${escapeHtml(st.store_name)}
+                ${isWinner ? '<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">LOWEST 1-STOP</span>' : ''}
+              </span>
+              <span class="font-extrabold ${isWinner ? 'text-emerald-700' : 'text-slate-900'}">$${st.total.toFixed(2)}</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full ${isWinner ? 'bg-emerald-500' : 'bg-slate-400'}" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const winnerItemsHtml = winner.items.map(it => `
+        <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0 text-xs sm:text-sm">
+          <div class="flex items-center gap-2">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+            <span class="font-medium text-slate-800">${escapeHtml(it.normalized_name)}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            ${it.is_best ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Best Price</span>' : ''}
+            <span class="font-bold text-slate-900">$${it.price.toFixed(2)}</span>
+          </div>
+        </div>
+      `).join('');
+
+      const splitStopsHtml = split.stops.map(stop => `
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+              <i data-lucide="map-pin" class="w-4 h-4 text-emerald-600"></i>
+              <span>Stop at ${escapeHtml(stop.store_name)}</span>
+            </span>
+            <span class="text-xs font-extrabold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-emerald-700">
+              Subtotal: $${stop.subtotal.toFixed(2)}
+            </span>
+          </div>
+          <div class="divide-y divide-slate-200/60">
+            ${stop.items.map(item => `
+              <div class="py-1.5 flex items-center justify-between text-xs">
+                <span class="text-slate-700 font-medium">${escapeHtml(item.normalized_name)}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-emerald-600 font-semibold">Save $${item.savings_vs_high.toFixed(2)}</span>
+                  <span class="font-bold text-slate-900">$${item.price.toFixed(2)}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      resultsEl.innerHTML = `
+        <!-- Source & Query Summary Banner -->
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
+          <div class="flex items-center gap-2 font-semibold">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+            <span>Basket Optimized for: <strong>"${escapeHtml(analysis.query)}"</strong> (${winner.items.length} matched products)</span>
+          </div>
+          <span class="text-[11px] font-medium text-emerald-700">${escapeHtml(analysis.poweredBy || '')}</span>
+        </div>
+
+        <!-- Two Main Strategy Cards: Single-Store Winner vs Split-Trip Max Savings -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Card 1: Single-Store Winner -->
+          <div class="bg-white rounded-2xl border-2 border-emerald-500 shadow-md overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-4 text-white flex items-center justify-between">
+                <div>
+                  <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-100 block">
+                    Recommended 1-Stop Trip
+                  </span>
+                  <h3 class="text-xl font-extrabold flex items-center gap-2">
+                    <i data-lucide="award" class="w-5 h-5"></i>
+                    <span>${escapeHtml(winner.store_name)}</span>
+                  </h3>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs text-emerald-100 block">Total Basket</span>
+                  <span class="text-2xl font-extrabold">$${winner.total_cost.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div class="p-5 space-y-4">
+                <p class="text-xs sm:text-sm text-slate-600 leading-relaxed bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
+                  ${escapeHtml(winner.rationale)}
+                </p>
+
+                <div>
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                    Itemized Basket at ${escapeHtml(winner.store_name)}
+                  </h4>
+                  <div class="bg-slate-50 rounded-xl p-3 border border-slate-200/80">
+                    ${winnerItemsHtml}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- All 4 Stores Comparison Bar Chart -->
+            <div class="p-5 bg-slate-50 border-t border-slate-200 space-y-2.5">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Single-Store Total Comparison (All 4 Stores)
+              </h4>
+              ${storeBarsHtml}
+            </div>
+          </div>
+
+          <!-- Card 2: Max-Savings Split Trip -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
+            <div>
+              <div class="bg-slate-900 px-5 py-4 text-white flex items-center justify-between">
+                <div>
+                  <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 block">
+                    Max-Savings Split Trip (${split.stops.length} ${split.stops.length === 1 ? 'Store' : 'Stores'})
+                  </span>
+                  <h3 class="text-xl font-extrabold flex items-center gap-2">
+                    <i data-lucide="route" class="w-5 h-5 text-emerald-400"></i>
+                    <span>Cherry-Pick Best Deals</span>
+                  </h3>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs text-slate-400 block">Optimal Total</span>
+                  <span class="text-2xl font-extrabold text-emerald-400">$${split.total_cost.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div class="p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                  <span class="font-semibold text-slate-700">
+                    Savings vs. Highest Store: <strong class="text-emerald-700">$${split.total_savings_vs_highest.toFixed(2)}</strong>
+                  </span>
+                  <span class="font-semibold text-slate-700">
+                    Extra Savings vs. 1-Stop Winner: <strong class="text-emerald-700">$${split.extra_savings_vs_single_winner.toFixed(2)}</strong>
+                  </span>
+                </div>
+
+                ${analysis.split_trip_advice ? `
+                  <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    ${escapeHtml(analysis.split_trip_advice)}
+                  </p>
+                ` : ''}
+
+                <div class="space-y-3">
+                  ${splitStopsHtml}
+                </div>
+              </div>
+            </div>
+
+            <!-- AI Smart Shopping Tips -->
+            <div class="p-5 bg-emerald-950 text-emerald-50 space-y-2.5">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <i data-lucide="lightbulb" class="w-4 h-4"></i>
+                <span>Smart Shopping Insights</span>
+              </h4>
+              <ul class="space-y-1.5 text-xs text-emerald-100/90">
+                ${(analysis.smart_tips || []).map(tip => `
+                  <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 font-bold">•</span>
+                    <span>${escapeHtml(tip)}</span>
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          </div>
+        </div>
+      `;
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
