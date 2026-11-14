@@ -1,0 +1,130 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalBasket - Crowd-Sourced Grocery Price Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono for receipt codes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            300: '#6ee7b7',
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .receipt-paper {
+            background: repeating-linear-gradient(
+                #ffffff,
+                #ffffff 22px,
+                #f1f5f9 24px
+            );
+            position: relative;
+        }
+        .receipt-jagged-top {
+            background: linear-gradient(135deg, #ffffff 5px, transparent 0), linear-gradient(-135deg, #ffffff 5px, transparent 0);
+            background-position: left top;
+            background-repeat: repeat-x;
+            background-size: 10px 10px;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                    <i data-lucide="shopping-basket" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-slate-900 tracking-tight">LocalBasket</h1>
+                    <p class="text-xs text-slate-500 font-medium">Crowd-Sourced Price Tracker</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button onclick="openScannerModal()" class="flex items-center space-x-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition active:scale-95">
+                    <i data-lucide="scan-line" class="w-4 h-4"></i>
+                    <span>Scan Receipt</span>
+                </button>
+                <button onclick="openAddModal()" class="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition active:scale-95">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Add Item</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-6 space-y-6">
+
+        <!-- Banner Alert / Privacy Note -->
+        <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-900 flex items-start space-x-3 shadow-sm">
+            <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"></i>
+            <div>
+                <span class="font-semibold block mb-0.5">Crowd-Sourced & Privacy First</span>
+                All grocery prices are shared anonymously by neighbors in your community. Help keep local inflation in check by logging deals!
+            </div>
+        </div>
+
+        <!-- Search & Store Filter Bar -->
+        <div class="space-y-3">
+            <div class="relative">
+                <i data-lucide="search" class="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400"></i>
+                <input type="text" id="searchInput" oninput="filterItems()" placeholder="Search milk, eggs, organic apples..." class="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition">
+            </div>
+
+            <!-- Categories Filter -->
+            <div id="categoryFilters" class="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-none">
+                <button onclick="setCategory('all')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-slate-900 text-white transition shadow-sm">All Items</button>
+                <button onclick="setCategory('Produce')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Produce</button>
+                <button onclick="setCategory('Dairy & Eggs')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Dairy & Eggs</button>
+                <button onclick="setCategory('Pantry')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Pantry</button>
+                <button onclick="setCategory('Meat & Seafood')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition">Meat & Seafood</button>
+                <button onclick="setCategory('Beverages')" class="cat-btn px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white border border-slate-200 text-slate
+```
